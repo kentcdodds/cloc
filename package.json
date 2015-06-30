@@ -1,0 +1,28 @@
+{
+  "name": "cloc",
+  "version": "1.0.0-beta.0",
+  "description": "An npm module for distributing cloc by Al Danial http://cloc.sourceforge.net/",
+  "main": "lib/cloc",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "bin": {
+    "cloc": "lib/cloc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/kentcdodds/cloc.git"
+  },
+  "keywords": [
+    "cloc",
+    "count lines of code",
+    "lines of code",
+    "loc"
+  ],
+  "author": "Kent C. Dodds <kent@doddsfamily.us> (http://kentcdodds.com)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/kentcdodds/cloc/issues"
+  },
+  "homepage": "https://github.com/kentcdodds/cloc#readme"
+}
