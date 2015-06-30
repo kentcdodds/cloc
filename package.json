@@ -4,6 +4,9 @@
   "description": "An npm module for distributing cloc by Al Danial http://cloc.sourceforge.net/",
   "main": "lib/cloc",
   "scripts": {
+    "release": "with-package git commit -am pkg.version && with-package git tag pkg.version && git push && npm publish && git push --tags",
+    "release:beta": "npm run release && npm run tag:beta",
+    "tag:beta": "with-package npm dist-tag add pkg.name@pkg.version beta",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "bin": {
@@ -24,5 +27,8 @@
   "bugs": {
     "url": "https://github.com/kentcdodds/cloc/issues"
   },
-  "homepage": "https://github.com/kentcdodds/cloc#readme"
+  "homepage": "https://github.com/kentcdodds/cloc#readme",
+  "devDependencies": {
+    "with-package": "0.2.0"
+  }
 }
