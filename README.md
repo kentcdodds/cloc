@@ -9,7 +9,21 @@ the file and commit it to my project.
 
 # Installation and Requirements
 
+## Requirements
+
+### Perl
+
 `cloc` is written in perl and the binary that this package exposes is the `cloc` perl script. You must have perl installed on your machine for this binary to work.
+
+### Node & npm
+
+This is distributed as an `npm` package (some say that stands for "Node Package Manager"). So you must have Node.js (or io.js) and npm installed.
+ 
+Here are quick instructions on how to get those: http://blog.nodeknockout.com/post/65463770933/how-to-install-node-js-and-npm
+
+Congratulations, you've opened your life to a whole new world of awesome tooling and other cool things :-)
+
+## Installation
 
 Install this tool via `npm`: `$ npm install -g cloc`
 
