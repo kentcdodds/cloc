@@ -23,7 +23,7 @@
     "loc"
   ],
   "author": "Kent C. Dodds <kent@doddsfamily.us> (http://kentcdodds.com)",
-  "license": "MIT",
+  "license": "GPL-2.0",
   "bugs": {
     "url": "https://github.com/kentcdodds/cloc/issues"
   },
