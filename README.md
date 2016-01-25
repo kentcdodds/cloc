@@ -2,7 +2,7 @@
 
 ![Screenshot](other/screenshot.png)
 
-This is just an npm distribution of the amazing [cloc](http://cloc.sourceforge.net/) by [Al Danial](pontifespresso).
+This is just an npm distribution of the amazing [cloc](https://github.com/AlDanial/cloc) by [Al Danial](pontifespresso).
 [I](https://twitter.com/kentcdodds) created this package because I think `cloc` is awesome, but didn't want to download
 the file and commit it to my project.
 
@@ -17,7 +17,7 @@ the file and commit it to my project.
 
 ### Node & npm
 
-This is distributed as an `npm` package (some say that stands for "Node Package Manager"). So you must have Node.js (or io.js) and npm installed.
+This is distributed as an `npm` package (some say that stands for "Node Package Manager"). So you must have Node.js and npm installed.
  
 Here are quick instructions on how to get those: http://blog.nodeknockout.com/post/65463770933/how-to-install-node-js-and-npm
 
@@ -60,11 +60,14 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
                                --extract-with="\"c:\Program Files\WinZip\WinZip32.exe\" -e -o >FILE< ."
                              (if WinZip is installed there).
    --list-file=<file>        Take the list of file and/or directory names to
-                             process from <file> which has one file/directory
-                             name per line.  See also --exclude-list-file.
+                             process from <file>, which has one file/directory
+                             name per line.  Only exact matches are counted;
+                             relative path names will be resolved starting from
+                             the directory where cloc is invoked.
+                             See also --exclude-list-file.
    --unicode                 Check binary files to see if they contain Unicode
                              expanded ASCII text.  This causes performance to
-                             drop noticably.
+                             drop noticeably.
 
  Processing Options
    --autoconf                Count .in files (as processed by GNU autoconf) of
@@ -72,15 +75,22 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
    --by-file                 Report results for every source file encountered.
    --by-file-by-lang         Report results for every source file encountered
                              in addition to reporting by language.
+   --count-and-diff <set1> <set2>
+                             First perform direct code counts of source file(s)
+                             of <set1> and <set2> separately, then perform a diff
+                             of these.  Inputs may be pairs of files, directories,
+                             or archives.  See also --diff, --diff-alignment,
+                             --diff-timeout, --ignore-case, --ignore-whitespace.
    --diff <set1> <set2>      Compute differences in code and comments between
                              source file(s) of <set1> and <set2>.  The inputs
                              may be pairs of files, directories, or archives.
                              Use --diff-alignment to generate a list showing
                              which file pairs where compared.  See also
+                             --count-and-diff, --diff-alignment, --diff-timeout,
                              --ignore-case, --ignore-whitespace.
    --diff-timeout <N>        Ignore files which take more than <N> seconds
                              to process.  Default is 10 seconds.
-                             (Large files with many repeated lines can cause 
+                             (Large files with many repeated lines can cause
                              Algorithm::Diff::sdiff() to take hours.)
    --follow-links            [Unix only] Follow symbolic links to directories
                              (sym links to files are always followed).
@@ -99,14 +109,15 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
                              See also --script-lang, --lang-no-ext.
    --force-lang-def=<file>   Load language processing filters from <file>,
                              then use these filters instead of the built-in
-                             filters.  Note:  languages which map to the same 
+                             filters.  Note:  languages which map to the same
                              file extension (for example:
-                             MATLAB/Objective C/MUMPS;  Pascal/PHP; 
-                             Lisp/OpenCL) will be ignored as these require 
-                             additional processing that is not expressed in 
-                             language definition files.  Use --read-lang-def 
-                             to define new language filters without replacing 
-                             built-in filters (see also --write-lang-def).
+                             MATLAB/Objective C/MUMPS/Mercury;  Pascal/PHP;
+                             Lisp/OpenCL; Lisp/Julia; Perl/Prolog) will be
+                             ignored as these require additional processing
+                             that is not expressed in language definition
+                             files.  Use --read-lang-def to define new
+                             language filters without replacing built-in
+                             filters (see also --write-lang-def).
    --ignore-whitespace       Ignore horizontal white space when comparing files
                              with --diff.  See also --ignore-case.
    --ignore-case             Ignore changes in case; consider upper- and lower-
@@ -120,21 +131,21 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
                              --force-lang, --script-lang.
    --max-file-size=<MB>      Skip files larger than <MB> megabytes when
                              traversing directories.  By default, <MB>=100.
-                             cloc's memory requirement is roughly twenty times 
-                             larger than the largest file so running with 
-                             files larger than 100 MB on a computer with less 
-                             than 2 GB of memory will cause problems.  
-                             Note:  this check does not apply to files 
+                             cloc's memory requirement is roughly twenty times
+                             larger than the largest file so running with
+                             files larger than 100 MB on a computer with less
+                             than 2 GB of memory will cause problems.
+                             Note:  this check does not apply to files
                              explicitly passed as command line arguments.
    --read-binary-files       Process binary files in addition to text files.
                              This is usually a bad idea and should only be
                              attempted with text files that have embedded
                              binary data.
    --read-lang-def=<file>    Load new language processing filters from <file>
-                             and merge them with those already known to cloc.  
-                             If <file> defines a language cloc already knows 
-                             about, cloc's definition will take precedence.  
-                             Use --force-lang-def to over-ride cloc's 
+                             and merge them with those already known to cloc.
+                             If <file> defines a language cloc already knows
+                             about, cloc's definition will take precedence.
+                             Use --force-lang-def to over-ride cloc's
                              definitions (see also --write-lang-def ).
    --script-lang=<lang>,<s>  Process all files that invoke <s> as a #!
                              scripting language with the counter for language
@@ -191,10 +202,19 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
    --exclude-lang=<L1>[,L2,] Exclude the given comma separated languages
                              L1, L2, L3, et cetera, from being counted.
    --exclude-list-file=<file>  Ignore files and/or directories whose names
-                             appear in <file>.  <file> should have one entry
-                             per line.  Relative path names will be resolved
-                             starting from the directory where cloc is
-                             invoked.  See also --list-file.
+                             appear in <file>.  <file> should have one file
+                             name per line.  Only exact matches are ignored;
+                             relative path names will be resolved starting from
+                             the directory where cloc is invoked.
+                             See also --list-file.
+   --fullpath                Modifies the behavior of --match-f or
+                             --not-match-f to include the file's path
+                             in the regex, not just the file's basename.
+                             (This does not expand each file to include its
+                             absolute path, instead it uses as much of
+                             the path as is passed in to cloc.)
+   --include-lang=<L1>[,L2,] Count only the given comma separated languages
+                             L1, L2, L3, et cetera.
    --match-d=<regex>         Only count files in directories matching the Perl
                              regex.  For example
                                --match-d='/(src|include)/'
@@ -206,8 +226,12 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
                              regex.  For example
                                --match-f='^[Ww]idget'
                              only counts files that start with Widget or widget.
+                             Add --fullpath to include parent directories
+                             in the regex instead of just the basename.
    --not-match-f=<regex>     Count all files except those whose basenames
-                             match the Perl regex.
+                             match the Perl regex.  Add --fullpath to include
+                             parent directories in the regex instead of just
+                             the basename.
    --skip-archive=<regex>    Ignore files that end with the given Perl regular
                              expression.  For example, if given
                                --skip-archive='(zip|tar(.(gz|Z|bz2|xz|7z))?)'
@@ -219,20 +243,20 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
  Debug Options
    --categorized=<file>      Save names of categorized files to <file>.
    --counted=<file>          Save names of processed source files to <file>.
-   --explain=<lang>          Print the filters used to remove comments for
-                             language <lang> and exit.  In some cases the 
-                             filters refer to Perl subroutines rather than
-                             regular expressions.  An examination of the
-                             source code may be needed for further explanation.
    --diff-alignment=<file>   Write to <file> a list of files and file pairs
                              showing which files were added, removed, and/or
                              compared during a run with --diff.  This switch
                              forces the --diff mode on.
+   --explain=<lang>          Print the filters used to remove comments for
+                             language <lang> and exit.  In some cases the
+                             filters refer to Perl subroutines rather than
+                             regular expressions.  An examination of the
+                             source code may be needed for further explanation.
    --help                    Print this usage information and exit.
    --found=<file>            Save names of every file found to <file>.
    --ignored=<file>          Save names of ignored files and the reason they
                              were ignored to <file>.
-   --print-filter-stages     Print processed source code before and after 
+   --print-filter-stages     Print processed source code before and after
                              each filter is applied.
    --show-ext[=<ext>]        Print information about all known (or just the
                              given) file extensions and exit.
@@ -241,6 +265,7 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
    --show-os                 Print the value of the operating system mode
                              and exit.  See also --unix, --windows.
    -v[=<n>]                  Verbose switch (optional numeric value).
+   -verbose[=<n>]            Long form of -v.
    --version                 Print the version of this program and exit.
    --write-lang-def=<file>   Writes to <file> the language processing filters
                              then exits.  Useful as a first step to creating
@@ -252,6 +277,24 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
                              (This option can cause report summation to fail
                              if some reports were produced with this option
                              while others were produced without it.)
+   --by-percent  X           Instead of comment and blank line counts, show
+                             these values as percentages based on the value
+                             of X in the denominator:
+                                X = 'c'   -> # lines of code
+                                X = 'cm'  -> # lines of code + comments
+                                X = 'cb'  -> # lines of code + blanks
+                                X = 'cmb' -> # lines of code + comments + blanks
+                             For example, if using method 'c' and your code
+                             has twice as many lines of comments as lines
+                             of code, the value in the comment column will
+                             be 200%.  The code column remains a line count.
+   --csv                     Write the results as comma separated values.
+   --csv-delimiter=<C>       Use the character <C> as the delimiter for comma
+                             separated files instead of ,.  This switch forces
+   --json                    Write the results as JavaScript Object Notation
+                             (JSON) formatted output.
+   --md                      Write the results as Markdown-formatted text.
+   --out=<file>              Synonym for --report-file=<file>.
    --progress-rate=<n>       Show progress update after every <n> files are
                              processed (default <n>=100).  Set <n> to 0 to
                              suppress progress output (useful when redirecting
@@ -259,19 +302,17 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
    --quiet                   Suppress all information messages except for
                              the final report.
    --report-file=<file>      Write the results to <file> instead of STDOUT.
-   --out=<file>              Synonym for --report-file=<file>.
-   --csv                     Write the results as comma separated values.
-   --csv-delimiter=<C>       Use the character <C> as the delimiter for comma
-                             separated files instead of ,.  This switch forces
-                             --csv to be on.
    --sql=<file>              Write results as SQL create and insert statements
                              which can be read by a database program such as
                              SQLite.  If <file> is -, output is sent to STDOUT.
-   --sql-project=<name>      Use <name> as the project identifier for the
-                             current run.  Only valid with the --sql option.
    --sql-append              Append SQL insert statements to the file specified
                              by --sql and do not generate table creation
                              statements.  Only valid with the --sql option.
+   --sql-project=<name>      Use <name> as the project identifier for the
+                             current run.  Only valid with the --sql option.
+   --sql-style=<style>       Write SQL statements in the given style instead
+                             of the default SQLite format.  Currently, the
+                             only style option is Oracle.
    --sum-one                 For plain text reports, show the SUM: output line
                              even if only one input file is processed.
    --xml                     Write the results in XML.
@@ -295,6 +336,9 @@ I use this in my project to keep track of my lines of code as the project grows 
   // your other config stuff
   "scripts": {
     "count": "cloc app/" // <-- other options would go here as well...
+  },
+  "devDependencies": {
+    "cloc": "2.0.0" // <-- this should be added automatically when you install with the `-D` flag
   }
   // more config stuff
 }
@@ -304,4 +348,5 @@ I use this in my project to keep track of my lines of code as the project grows 
 
 # LICENSE
 
-This package is MIT licensed. However the `cloc` library itself is licensed with GPL 2.
+This package is and the `cloc` cli itself is licensed with GPL 2.
+
