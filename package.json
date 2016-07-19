@@ -1,6 +1,6 @@
 {
   "name": "cloc",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "An npm module for distributing cloc by Al Danial http://cloc.sourceforge.net/",
   "main": "lib/cloc",
   "scripts": {
