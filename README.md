@@ -65,6 +65,25 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
                              relative path names will be resolved starting from
                              the directory where cloc is invoked.
                              See also --exclude-list-file.
+   --vcs=<VCS>               Invoke a system call to <VCS> to obtain a list of
+                             files to work on.  If <VCS> is 'git', then will
+                             invoke 'git ls-files' to get a file list and
+                             'git submodule status' to get a list of submodules
+                             whose contents will be ignored.  If <VCS> is 'svn'
+                             then will invoke 'svn list -R'.  The primary benefit
+                             is that cloc will then skip files explicitly
+                             excluded by the versioning tool in question,
+                             ie, those in .gitignore or have the svn:ignore
+                             property.
+                             Alternatively <VCS> may be any system command
+                             that generates a list of files.
+                             Note:  cloc must be in a directory which can read
+                             the files as they are returned by <VCS>.  cloc will
+                             not download files from remote repositories.
+                             'svn list -R' may refer to a remote repository
+                             to obtain file names (and therefore may require
+                             authentication to the remote repository), but
+                             the files themselves must be local.
    --unicode                 Check binary files to see if they contain Unicode
                              expanded ASCII text.  This causes performance to
                              drop noticeably.
@@ -111,12 +130,12 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
                              then use these filters instead of the built-in
                              filters.  Note:  languages which map to the same
                              file extension (for example:
-                             MATLAB/Objective C/MUMPS/Mercury;  Pascal/PHP;
-                             Lisp/OpenCL; Lisp/Julia; Perl/Prolog) will be
-                             ignored as these require additional processing
-                             that is not expressed in language definition
-                             files.  Use --read-lang-def to define new
-                             language filters without replacing built-in
+                             MATLAB/Mathematica/Objective C/MUMPS/Mercury;
+                             Pascal/PHP; Lisp/OpenCL; Lisp/Julia; Perl/Prolog)
+                             will be ignored as these require additional
+                             processing that is not expressed in language
+                             definition files.  Use --read-lang-def to define
+                             new language filters without replacing built-in
                              filters (see also --write-lang-def).
    --ignore-whitespace       Ignore horizontal white space when comparing files
                              with --diff.  See also --ignore-case.
@@ -137,6 +156,9 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
                              than 2 GB of memory will cause problems.
                              Note:  this check does not apply to files
                              explicitly passed as command line arguments.
+   --original-dir            [Only effective in combination with
+                             --strip-comments]  Write the stripped files
+                             to the same directory as the original files.
    --read-binary-files       Process binary files in addition to text files.
                              This is usually a bad idea and should only be
                              attempted with text files that have embedded
@@ -167,16 +189,14 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
                              files with identical contents multiple times
                              (if such duplicates exist).
    --stdin-name=<file>       Give a file name to use to determine the language
-                             for standard input.
+                             for standard input.  (Use - as the input name to
+                             receive source code via STDIN.)
    --strip-comments=<ext>    For each file processed, write to the current
                              directory a version of the file which has blank
                              lines and comments removed.  The name of each
                              stripped file is the original file name with
                              .<ext> appended to it.  It is written to the
                              current directory unless --original-dir is on.
-   --original-dir            [Only effective in combination with
-                             --strip-comments]  Write the stripped files
-                             to the same directory as the original files.
    --sum-reports             Input arguments are report files previously
                              created with the --report-file option.  Makes
                              a cumulative set of results containing the
@@ -184,6 +204,15 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
    --unix                    Override the operating system autodetection
                              logic and run in UNIX mode.  See also
                              --windows, --show-os.
+   --use-sloccount           If SLOCCount is installed, use its compiled
+                             executables c_count, java_count, pascal_count,
+                             php_count, and xml_count instead of cloc's
+                             counters.  SLOCCount's compiled counters are
+                             substantially faster than cloc's and may give
+                             a performance improvement when counting projects
+                             with large files.  However, these cloc-specific
+                             features will not be available: --diff,
+                             --count-and-diff, --strip-comments, --unicode.
    --windows                 Override the operating system autodetection
                              logic and run in Microsoft Windows mode.
                              See also --unix, --show-os.
@@ -192,10 +221,14 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
    --exclude-dir=<D1>[,D2,]  Exclude the given comma separated directories
                              D1, D2, D3, et cetera, from being scanned.  For
                              example  --exclude-dir=.cache,test  will skip
-                             all files that have /.cache/ or /test/ as part
-                             of their path.
+                             all files and subdirectories that have /.cache/
+                             or /test/ as their parent directory.
                              Directories named .bzr, .cvs, .hg, .git, and
                              .svn are always excluded.
+                             This option only works with individual directory
+                             names so including file path separators is not
+                             allowed.  Use --fullpath and --not-match-d=<regex>
+                             to supply a regex matching multiple subdirectories.
    --exclude-ext=<ext1>[,<ext2>[...]]
                              Do not count files having the given file name
                              extensions.
@@ -207,21 +240,32 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
                              relative path names will be resolved starting from
                              the directory where cloc is invoked.
                              See also --list-file.
-   --fullpath                Modifies the behavior of --match-f or
-                             --not-match-f to include the file's path
+   --fullpath                Modifies the behavior of --match-f, --not-match-f,
+                             and --not-match-d to include the file's path
                              in the regex, not just the file's basename.
                              (This does not expand each file to include its
                              absolute path, instead it uses as much of
                              the path as is passed in to cloc.)
+                             Note:  --match-d always looks at the full
+                             path and therefore is unaffected by --fullpath.
    --include-lang=<L1>[,L2,] Count only the given comma separated languages
                              L1, L2, L3, et cetera.
    --match-d=<regex>         Only count files in directories matching the Perl
                              regex.  For example
                                --match-d='/(src|include)/'
                              only counts files in directories containing
-                             /src/ or /include/.
+                             /src/ or /include/.  Unlike --not-match-d,
+                             --match-f, and --not-match-f, --match-d always
+                             compares the fully qualified path against the regex.
    --not-match-d=<regex>     Count all files except those in directories
-                             matching the Perl regex.
+                             matching the Perl regex.  Only the trailing
+                             directory name is compared, for example, when
+                             counting in /usr/local/lib, only 'lib' is
+                             compared to the regex.
+                             Add --fullpath to compare parent directories to
+                             the regex.
+                             Do not include file path separators at the beginning
+                             or end of the regex.
    --match-f=<regex>         Only count files whose basenames match the Perl
                              regex.  For example
                                --match-f='^[Ww]idget'
