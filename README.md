@@ -6,6 +6,7 @@ This is just an npm distribution of the amazing [cloc](https://github.com/AlDani
 [I](https://twitter.com/kentcdodds) created this package because I think `cloc` is awesome, but didn't want to download
 the file and commit it to my project.
 
+<a href="https://app.codesponsor.io/link/PKGFLnhDiFvsUA5P4kAXfiPs/kentcdodds/cloc" rel="nofollow"><img src="https://app.codesponsor.io/embed/PKGFLnhDiFvsUA5P4kAXfiPs/kentcdodds/cloc.svg" style="width: 888px; height: 68px;" alt="Sponsor" /></a>
 
 # Installation and Requirements
 
