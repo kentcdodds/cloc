@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 # cloc -- Count Lines of Code                  {{{1
-# Copyright (C) 2006-2019 Al Danial <al.danial@gmail.com>
+# Copyright (C) 2006-2020 Al Danial <al.danial@gmail.com>
 # First release August 2006
 #
 # Includes code from:
@@ -29,7 +29,7 @@
 # <http://www.gnu.org/licenses/gpl.txt>.
 #
 # 1}}}
-my $VERSION = "1.85";  # odd number == beta; even number == stable
+my $VERSION = "1.86";  # odd number == beta; even number == stable
 my $URL     = "github.com/AlDanial/cloc";  # 'https://' pushes header too wide
 require 5.006;
 # use modules                                  {{{1
@@ -147,6 +147,13 @@ my $NN     = chr(27) . "[0m";  # normal
 my $BB     = chr(27) . "[1m";  # bold
    $BB     = "" if $ON_WINDOWS or !(-t STDOUT);
 my $script = basename $0;
+
+#  Intended for v1.88:
+#  --git-diff-simindex       Git diff strategy #3:  use git's similarity index
+#                            (git diff -M --name-status) to identify file pairs
+#                            to compare.  This is especially useful to compare
+#                            files that were renamed between the commits.
+
 my $brief_usage  = "
                        cloc -- Count Lines of Code
 
@@ -195,8 +202,15 @@ Usage: $script [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <repo
                              process from <file>, which has one file/directory
                              name per line.  Only exact matches are counted;
                              relative path names will be resolved starting from
-                             the directory where cloc is invoked.
+                             the directory where cloc is invoked.  Set <file>
+                             to - to read file names from a STDIN pipe.
                              See also --exclude-list-file.
+   --diff-list-file=<file>   Take the pairs of file names to be diff'ed from
+                             <file>, whose format matches the output of
+                             --diff-alignment.  (Run with that option to
+                             see a sample.)  The language identifier at the
+                             end of each line is ignored.  This enables --diff
+                             mode and by-passes file pair alignment logic.
    --vcs=<VCS>               Invoke a system call to <VCS> to obtain a list of
                              files to work on.  If <VCS> is 'git', then will
                              invoke 'git ls-files' to get a file list and
@@ -217,6 +231,10 @@ Usage: $script [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <repo
                              to obtain file names (and therefore may require
                              authentication to the remote repository), but
                              the files themselves must be local.
+                             Setting <VCS> to 'auto' selects between 'git'
+                             and 'svn' (or neither) depending on the presence
+                             of a .git or .svn subdirectory below the directory
+                             where cloc is invoked.
    --unicode                 Check binary files to see if they contain Unicode
                              expanded ASCII text.  This causes performance to
                              drop noticeably.
@@ -248,8 +266,11 @@ Usage: $script [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <repo
                              may be any mix of files, directories, archives,
                              or git commit hashes.  Use --diff-alignment to
                              generate a list showing which file pairs where
-                             compared.  See also --count-and-diff, --diff-alignment.
-                             --diff-timeout, --ignore-case, --ignore-whitespace,
+                             compared.  When comparing git branches, only files
+                             which have changed in either commit are compared.
+                             See also --git, --count-and-diff, --diff-alignment,
+                             --diff-list-file, --diff-timeout, --ignore-case,
+                             --ignore-whitespace.
    --diff-timeout <N>        Ignore files which take more than <N> seconds
                              to process.  Default is 10 seconds.  Setting <N>
                              to 0 allows unlimited time.  (Large files with many
@@ -300,6 +321,11 @@ Usage: $script [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <repo
                              commits, or between a git commit and a file,
                              directory, or archive.  Use -v/--verbose to see
                              the git system commands cloc issues.
+   --git-diff-rel            Same as --git --diff, or just --diff if the inputs
+                             are recognized as git targets.  Only files which
+                             have changed in either commit are compared.
+   --git-diff-all            Git diff strategy #2:  compare all files in the
+                             repository between the two commits.
    --ignore-whitespace       Ignore horizontal white space when comparing files
                              with --diff.  See also --ignore-case.
    --ignore-case             Ignore changes in case within file contents;
@@ -615,6 +641,7 @@ my (
     $opt_count_diff           ,
     $opt_diff                 ,
     $opt_diff_alignment       ,
+    $opt_diff_list_file       ,
     $opt_diff_timeout         ,
     $opt_timeout              ,
     $opt_html                 ,
@@ -691,6 +718,9 @@ my (
     $opt_use_sloccount        ,
     $opt_no_autogen           ,
     $opt_force_git            ,
+    $opt_git_diff_rel         ,
+    $opt_git_diff_all         ,
+    $opt_git_diff_simindex    ,
     $opt_config_file          ,
     $opt_strip_str_comments   ,
     $opt_file_encoding        ,
@@ -716,6 +746,7 @@ my $getopt_success = GetOptions(             # {{{1
    "diff"                                    => \$opt_diff                ,
    "diff-alignment|diff_alignment=s"         => \$opt_diff_alignment      ,
    "diff-timeout|diff_timeout=i"             => \$opt_diff_timeout        ,
+   "diff-list-file|diff_list_file=s"         => \$opt_diff_list_file      ,
    "timeout=i"                               => \$opt_timeout             ,
    "html"                                    => \$opt_html                ,
    "ignored=s"                               => \$opt_ignored             ,
@@ -784,6 +815,9 @@ my $getopt_success = GetOptions(             # {{{1
    "use_sloccount|use-sloccount"             => \$opt_use_sloccount       ,
    "no_autogen|no-autogen"                   => \$opt_no_autogen          ,
    "git"                                     => \$opt_force_git           ,
+   "git_diff_rel|git-diff-rel"               => \$opt_git_diff_rel        ,
+   "git_diff_all|git-diff-all"               => \$opt_git_diff_all        ,
+#  "git_diff_simindex|git-diff-simindex"     => \$opt_git_diff_simindex   ,
    "config=s"                                => \$opt_config_file         ,
    "strip_str_comments|strip-str-comments"   => \$opt_strip_str_comments  ,
    "file_encoding|file-encoding=s"           => \$opt_file_encoding       ,
@@ -912,8 +946,17 @@ $Exclude_Dir{".hg"}    = 1;
 $Exclude_Dir{".git"}   = 1;
 $Exclude_Dir{".bzr"}   = 1;
 $Exclude_Dir{".snapshot"} = 1;  # NetApp backups
+$Exclude_Dir{".config"} = 1;
 $opt_count_diff        = defined $opt_count_diff ? 1 : 0;
-$opt_diff              = 1  if $opt_diff_alignment;
+$opt_diff              = 1  if $opt_diff_alignment    or
+                               $opt_diff_list_file    or
+                               $opt_git_diff_rel      or
+                               $opt_git_diff_all      or
+                               $opt_git_diff_simindex;
+$opt_force_git         = 1  if $opt_git_diff_rel      or
+                               $opt_git_diff_all      or
+                               $opt_git_diff_simindex;
+$opt_diff_alignment    = 0  if $opt_diff_list_file;
 $opt_exclude_ext       = "" unless $opt_exclude_ext;
 $opt_ignore_whitespace = 0  unless $opt_ignore_whitespace;
 $opt_ignore_case       = 0  unless $opt_ignore_case;
@@ -963,7 +1006,7 @@ $opt_vcs = 0 if $opt_force_git;
 
 my @COUNT_DIFF_ARGV        = undef;
 my $COUNT_DIFF_report_file = undef;
-if ($opt_count_diff) {
+if ($opt_count_diff and !$opt_diff_list_file) {
     die "--count-and-diff requires two arguments; got ", scalar @ARGV, "\n"
         if scalar @ARGV != 2;
     # prefix with a dummy term so that $opt_count_diff is the
@@ -1014,6 +1057,15 @@ if ($opt_by_percent and $opt_by_percent !~ m/^(c|cm|cb|cmb)$/i) {
 $opt_by_percent = lc $opt_by_percent;
 
 if (defined $opt_vcs) {
+    if ($opt_vcs eq "auto") {
+        if      (-d ".git") {
+            $opt_vcs = "git";
+        } elsif (-d ".svn") {
+            $opt_vcs = "svn";
+        } else {
+            warn "--vcs auto:  unable to determine versioning system\n";
+        }
+    }
     if      ($opt_vcs eq "git") {
         $opt_vcs = "git ls-files";
         my @submodules = invoke_generator('git submodule status');
@@ -1041,19 +1093,23 @@ die $brief_usage unless defined $opt_version         or
                         defined $opt_write_lang_def  or
                         defined $opt_write_lang_def_incl_dup  or
                         defined $opt_list_file       or
+                        defined $opt_diff_list_file  or
                         defined $opt_vcs             or
                         defined $opt_xsl             or
                         defined $opt_explain         or
                         $list_no_autogen             or
                         scalar @ARGV >= 1;
-die "--diff requires two arguments; got ", scalar @ARGV, "\n"
-    if $opt_diff and !$opt_sum_reports and scalar @ARGV != 2;
-die "--diff arguments are identical; nothing done", "\n"
-    if $opt_diff and !$opt_sum_reports and scalar @ARGV == 2
-                                       and $ARGV[0] eq $ARGV[1];
+if (!$opt_diff_list_file) {
+	die "--diff requires two arguments; got ", scalar @ARGV, "\n"
+		if $opt_diff and !$opt_sum_reports and scalar @ARGV != 2;
+	die "--diff arguments are identical; nothing done", "\n"
+		if $opt_diff and !$opt_sum_reports and scalar @ARGV == 2
+										   and $ARGV[0] eq $ARGV[1];
+}
 trick_pp_packer_encode() if $ON_WINDOWS and $opt_file_encoding;
 $File::Find::dont_use_nlink = 1 if $opt_stat or top_level_SMB_dir(\@ARGV);
-replace_git_hash_with_tarfile(\@ARGV);
+my @git_similarity = (); # only populated with --git-diff-simindex
+replace_git_hash_with_tarfile(\@ARGV, \@git_similarity);
 # 1}}}
 # Step 1:  Initialize global constants.        {{{1
 #
@@ -1084,6 +1140,7 @@ my %Extension_Collision = (
     'Pascal/Puppet'                                 => [ 'pp'   ] ,
     'Perl/Prolog'                                   => [ 'pl', 'PL'  ] ,
     'PHP/Pascal'                                    => [ 'inc'  ] ,
+    'Raku/Prolog'                                   => [ 'p6', 'P6'  ] ,
     'Qt/Glade'                                      => [ 'ui'   ] ,
     'TypeScript/Qt Linguist'                        => [ 'ts'   ] ,
     'Verilog-SystemVerilog/Coq'                     => [ 'v'    ] ,
@@ -1452,7 +1509,7 @@ if ($opt_extract_with) {
 } else {
     # see if any of the inputs need to be auto-uncompressed &/or expanded
     my @updated_ARGS = ();
-    replace_git_hash_with_tarfile(\@ARGV) if $opt_force_git;
+    replace_git_hash_with_tarfile(\@ARGV, \@git_similarity) if $opt_force_git;
     foreach my $Arg (@ARGV) {
         if (is_dir($Arg)) {
             push @updated_ARGS, $Arg;
@@ -1521,11 +1578,39 @@ if ($opt_diff) {
 # Step 4:  Separate code from non-code files.  {{{1
 my @fh            = ();
 my @files_for_set = ();
+my @files_added_tot = ();
+my @files_removed_tot = ();
+my @file_pairs_tot = ();
 # make file lists for each separate argument
+if ($opt_diff_list_file) {
+	@files_for_set = ( (), () );
+    file_pairs_from_file($opt_diff_list_file, # in
+                        \@files_added_tot   , # out
+                        \@files_removed_tot , # out
+                        \@file_pairs_tot    , # out
+                       );
+    foreach my $F (@files_added_tot) {
+		push @{$files_for_set[1]}, $F;
+	}
+    foreach my $F (@files_removed_tot) {
+		push @{$files_for_set[0]}, $F;
+	}
+    foreach my $pair (@file_pairs_tot) {
+		push @{$files_for_set[0]}, $pair->[0];
+		push @{$files_for_set[1]}, $pair->[1];
+	}
+	@ARGV = (1, 2); # place holders
+}
 for (my $i = 0; $i < scalar @ARGV; $i++) {
-    push @fh,
-         make_file_list([ $ARGV[$i] ], \%Error_Codes, \@Errors, \%Ignored);
-    @{$files_for_set[$i]} = @file_list;
+	if ($opt_diff_list_file) {
+		push @fh, make_file_list($files_for_set[$i],
+                                \%Error_Codes, \@Errors, \%Ignored);
+		@{$files_for_set[$i]} = @file_list;
+    } else {
+		push @fh, make_file_list([ $ARGV[$i] ],
+                                \%Error_Codes, \@Errors, \%Ignored);
+		@{$files_for_set[$i]} = @file_list;
+    }
     if ($opt_exclude_list_file) {
         # note: process_exclude_list_file() references global @file_list
         process_exclude_list_file($opt_exclude_list_file,
@@ -1557,6 +1642,27 @@ foreach my $FH (@fh) {  # loop over each pair of file sets
                         \%{$unique_source_file{$FH}},       # in/out
                         \%Ignored);                         # out
     }
+
+    if ($opt_include_lang) {
+        # remove files associated with languages not
+        # specified by --include-lang
+        my @delete_file = ();
+        foreach my $file (keys %{$unique_source_file{$FH}}) {
+            my $keep_file = 0;
+            foreach my $keep_lang (keys %Include_Language) {
+                if ($Language{$FH}{$file} eq $keep_lang) {
+                    $keep_file = 1;
+                    last;
+                }
+            }
+            next if $keep_file;
+            push @delete_file, $file;
+        }
+        foreach my $file (@delete_file) {
+            delete $Language{$FH}{$file};
+        }
+    }
+
     printf "%2d: %8d unique file%s.                          \r",
         $n_set,
         plural_form(scalar keys %unique_source_file)
@@ -1570,9 +1676,6 @@ my %Results_by_File     = ();
 my %Delta_by_Language   = ();
 my %Delta_by_File       = ();
 
-my @files_added_tot = ();
-my @files_removed_tot = ();
-my @file_pairs_tot = ();
 my %alignment = ();
 
 my $fset_a = $fh[0];
@@ -1582,16 +1685,18 @@ my $n_filepairs_compared = 0;
 my $tot_counted = 0;
 
 if ( scalar @fh != 2 ) {
-    print "Error: in correct length fh array when preparing diff at step 6.\n";
-    exit 1;
+	print "Error: incorrect length fh array when preparing diff at step 6.\n";
+	exit 1;
+}
+if (!$opt_diff_list_file) {
+    align_by_pairs(\%{$unique_source_file{$fset_a}}      , # in
+                   \%{$unique_source_file{$fset_b}}      , # in
+                   \@files_added_tot                     , # out
+                   \@files_removed_tot                   , # out
+                   \@file_pairs_tot                      , # out
+                  );
 }
 
-align_by_pairs(\%{$unique_source_file{$fset_a}}      , # in
-               \%{$unique_source_file{$fset_b}}      , # in
-               \@files_added_tot                     , # out
-               \@files_removed_tot                   , # out
-               \@file_pairs_tot                      , # out
-              );
 #use Data::Dumper;
 #print "added : ", Dumper(\@files_added_tot);
 #print "removed : ", Dumper(\@files_removed_tot);
@@ -2174,10 +2279,17 @@ sub count_filesets {                         # {{{1
             and not $Include_Ext{ file_extension($f) };
         next if $opt_include_lang
             and not $Include_Language{$Language{$fset_b}{$f}};
-        next if $Language{$fset_b}{$f} eq "(unknown)";
-        next if $Exclude_Language{$fset_b}{$f};
-        $p_alignment{"added"}{sprintf "  + %s ; %s\n", $f, $Language{$fset_b}{$f}} = 1;
-        ++$p_dbl{ $Language{$fset_b}{$f} }{'nFiles'}{'added'};
+        my $this_lang = $Language{$fset_b}{$f};
+        if ($this_lang eq "(unknown)") {
+            $p_ignored{$f} = "uknown language";
+            next;
+        }
+        if ($Exclude_Language{$this_lang}) {
+            $p_ignored{$f} = "--exclude-lang=$this_lang";
+            next;
+        }
+        $p_alignment{"added"}{sprintf "  + %s ; %s\n", $f, $this_lang} = 1;
+        ++$p_dbl{ $this_lang }{'nFiles'}{'added'};
         # Additionally, add contents of file $f to
         # Delta_by_File{$f}{comment/blank/code}{'added'}
         # Delta_by_Language{$lang}{comment/blank/code}{'added'}
@@ -2185,12 +2297,10 @@ sub count_filesets {                         # {{{1
         my ($all_line_count,
             $blank_count   ,
             $comment_count ,
-           ) = call_counter($f, $Language{$fset_b}{$f}, \@p_errors);
-        $p_dbl{ $Language{$fset_b}{$f} }{'comment'}{'added'} +=
-           $comment_count;
-        $p_dbl{ $Language{$fset_b}{$f} }{'blank'}{'added'}   +=
-           $blank_count;
-        $p_dbl{ $Language{$fset_b}{$f} }{'code'}{'added'}    +=
+           ) = call_counter($f, $this_lang, \@p_errors);
+        $p_dbl{ $this_lang }{'comment'}{'added'} += $comment_count;
+        $p_dbl{ $this_lang }{'blank'}{'added'}   += $blank_count;
+        $p_dbl{ $this_lang }{'code'}{'added'}    +=
            $all_line_count - $blank_count - $comment_count;
         $p_dbf{ $f }{'comment'}{'added'} = $comment_count;
         $p_dbf{ $f }{'blank'}{'added'}   = $blank_count;
@@ -2206,11 +2316,19 @@ sub count_filesets {                         # {{{1
         next if $opt_include_ext
             and not $Include_Ext{ file_extension($f) };
         next if $opt_include_lang
-            and not $Include_Language{$Language{$fset_a}{$f}};
-        next if $Language{$fset_a}{$f} eq "(unknown)";
-        next if $Exclude_Language{$fset_a}{$f};
-        ++$p_dbl{ $Language{$fset_a}{$f} }{'nFiles'}{'removed'};
-        $p_alignment{"removed"}{sprintf "  - %s ; %s\n", $f, $Language{$fset_a}{$f}} = 1;
+            and (not defined $Language{$fset_a}{$f}
+             or  not defined $Include_Language{$Language{$fset_a}{$f}});
+        my $this_lang = $Language{$fset_a}{$f};
+        if ($this_lang eq "(unknown)") {
+            $p_ignored{$f} = "uknown language";
+            next;
+        }
+        if ($Exclude_Language{$this_lang}) {
+            $p_ignored{$f} = "--exclude-lang=$this_lang";
+            next;
+        }
+        ++$p_dbl{ $this_lang }{'nFiles'}{'removed'};
+        $p_alignment{"removed"}{sprintf "  - %s ; %s\n", $f, $this_lang} = 1;
         #printf "%10s -> %s\n", $f, $Language{$fh[$F  ]}{$f};
         # Additionally, add contents of file $f to
         #        Delta_by_File{$f}{comment/blank/code}{'removed'}
@@ -2219,12 +2337,10 @@ sub count_filesets {                         # {{{1
         my ($all_line_count,
             $blank_count   ,
             $comment_count ,
-           ) = call_counter($f, $Language{$fset_a}{$f}, \@p_errors);
-        $p_dbl{ $Language{$fset_a}{$f}}{'comment'}{'removed'} +=
-             $comment_count;
-        $p_dbl{ $Language{$fset_a}{$f}}{'blank'}{'removed'}   +=
-             $blank_count;
-        $p_dbl{ $Language{$fset_a}{$f}}{'code'}{'removed'}    +=
+           ) = call_counter($f, $this_lang, \@p_errors);
+        $p_dbl{ $this_lang}{'comment'}{'removed'} += $comment_count;
+        $p_dbl{ $this_lang}{'blank'}{'removed'}   += $blank_count;
+        $p_dbl{ $this_lang}{'code'}{'removed'}    +=
              $all_line_count - $blank_count - $comment_count;
         $p_dbf{ $f }{'comment'}{'removed'} = $comment_count;
         $p_dbf{ $f }{'blank'}{'removed'}   = $blank_count;
@@ -2809,7 +2925,7 @@ sub diff_report     {                        # {{{1
     if (!$opt_3) {
         $spacing_1 = 19;
         $spacing_2 = 14;
-        $spacing_3 = 28;
+        $spacing_3 = 27;
     }
     $spacing_0 += $column_1_offset;
     $spacing_1 += $column_1_offset;
@@ -2822,7 +2938,7 @@ sub diff_report     {                        # {{{1
                  'txt' => "\%-${spacing_3}s ",
                },
         '3' => { 'xml' => 'files_count="%d" ',
-                 'txt' => '%5d ',
+                 'txt' => '%6d ',
                },
         '4' => { 'xml' => 'blank="%d" comment="%d" code="%d" ',
                  'txt' => "\%${spacing_2}d \%${spacing_2}d \%${spacing_2}d",
@@ -3638,7 +3754,7 @@ sub generate_report {                        # {{{1
     if (!$opt_3) {
         $spacing_1 = 19;
         $spacing_2 = 14;
-        $spacing_3 = 28;
+        $spacing_3 = 27;
     }
     $spacing_0 += $column_1_offset;
     $spacing_1 += $column_1_offset;
@@ -3651,7 +3767,7 @@ sub generate_report {                        # {{{1
                  'txt' => "\%-${spacing_3}s ",
                },
         '3' => { 'xml' => 'files_count="%d" ',
-                 'txt' => '%5d ',
+                 'txt' => '%6d ',
                },
         '4' => { 'xml' => 'blank="%d" comment="%d" code="%d" ',
                  'txt' => "\%${spacing_2}d \%${spacing_2}d \%${spacing_2}d",
@@ -4208,6 +4324,15 @@ sub read_lang_def {                          # {{{1
             push @{$rhaa_Filters_by_Language->{$language}}, [
                   $1 , $2 , $3 , $4 ]
 
+        } elsif (/^\s{4}filter\s+(replace_regex)\s+(\S+)\s*$/) {
+            push @{$rhaa_Filters_by_Language->{$language}}, [
+                  $1 , $2 , '' ]
+
+        } elsif (/^\s{4}filter\s+(replace_regex)
+                       \s+(\S+)\s+(.+?)\s*$/x) {
+            push @{$rhaa_Filters_by_Language->{$language}}, [
+                  $1 , $2 , $3 ]
+
         } elsif (/^\s{4}filter\s+(\w+)\s*$/) {
             push @{$rhaa_Filters_by_Language->{$language}}, [ $1 ]
 
@@ -4275,19 +4400,39 @@ sub merge_lang_def {                         # {{{1
         die "Missing computer language name, line $. of $file\n"
             unless $language;
 
-        if      (/^    filter\s+(\w+)\s*$/) {
+        if      (/^\s{4}filter\s+(remove_between_(general|2re|regex))
+                       \s+(\S+)\s+(\S+)\s*$/x) {
+            next if $already_know_it;
+            push @{$rhaa_Filters_by_Language->{$language}}, [
+                  $1 , $3 , $4 ]
+
+        } elsif (/^\s{4}filter\s+(replace_between_regex)
+                   \s+(\S+)\s+(\S+)\s+(\S+|\".*\")\s+(\S+)\s*$/x) {
+            next if $already_know_it;
+            push @{$rhaa_Filters_by_Language->{$language}}, [
+                  $1 , $2 , $3 , $4 , $5]
+
+        } elsif (/^\s{4}filter\s+(replace_between_regex)
+                       \s+(\S+)\s+(\S+)\s+(.*?)\s*$/x) {
+            next if $already_know_it;
+            push @{$rhaa_Filters_by_Language->{$language}}, [
+                  $1 , $2 , $3 , $4 ]
+
+        } elsif (/^\s{4}filter\s+(replace_regex)
+                       \s+(\S+)\s+(.+?)\s*$/x) {
+            next if $already_know_it;
+            push @{$rhaa_Filters_by_Language->{$language}}, [
+                  $1 , $2 , $3 ]
+
+        } elsif (/^\s{4}filter\s+(\w+)\s*$/) {
             next if $already_know_it;
             push @{$rhaa_Filters_by_Language->{$language}}, [ $1 ]
 
-        } elsif (/^    filter\s+(remove_between_(general|regex))\s+(\S+)\s+(\S+)\s*$/) {
-            next if $already_know_it;
-            push @{$rhaa_Filters_by_Language->{$language}},
-                  [ $1 , $3 , $4 ]
-        } elsif (/^    filter\s+(\w+)\s+(.*?)\s*$/) {
+        } elsif (/^\s{4}filter\s+(\w+)\s+(.*?)\s*$/) {
             next if $already_know_it;
             push @{$rhaa_Filters_by_Language->{$language}}, [ $1 , $2 ]
 
-        } elsif (/^    extension\s+(\S+)\s*$/) {
+        } elsif (/^\s{4}extension\s+(\S+)\s*$/) {
             next if $already_know_it;
             if (defined $rh_Language_by_Extension->{$1}) {
                 die "File extension collision:  $1 ",
@@ -4298,19 +4443,19 @@ sub merge_lang_def {                         # {{{1
             }
             $rh_Language_by_Extension->{$1} = $language;
 
-        } elsif (/^    filename\s+(\S+)\s*$/) {
+        } elsif (/^\s{4}filename\s+(\S+)\s*$/) {
             next if $already_know_it;
             $rh_Language_by_File->{$1} = $language;
 
-        } elsif (/^    script_exe\s+(\S+)\s*$/) {
+        } elsif (/^\s{4}script_exe\s+(\S+)\s*$/) {
             next if $already_know_it;
             $rh_Language_by_Script->{$1} = $language;
 
-        } elsif (/^    3rd_gen_scale\s+(\S+)\s*$/) {
+        } elsif (/^\s{4}3rd_gen_scale\s+(\S+)\s*$/) {
             next if $already_know_it;
             $rh_Scale_Factor->{$language} = $1;
 
-        } elsif (/^    end_of_line_continuation\s+(\S+)\s*$/) {
+        } elsif (/^\s{4}end_of_line_continuation\s+(\S+)\s*$/) {
             next if $already_know_it;
             $rh_EOL_Continuation_re->{$language} = $1;
 
@@ -4378,6 +4523,11 @@ sub print_language_info {                    # {{{1
     if (!$language or $language =~ /^(Perl|Prolog)$/i) {
         push @{$extensions{'Perl'}}  , "pl";
         push @{$extensions{'Prolog'}}, "pl";
+        delete $extensions{'Perl/Prolog'};
+    }
+    if (!$language or $language =~ /^(Raku|Prolog)$/i) {
+        push @{$extensions{'Perl'}}  , "p6";
+        push @{$extensions{'Prolog'}}, "p6";
         delete $extensions{'Perl/Prolog'};
     }
     if (!$language or $language =~ /^(IDL|Qt Project|Prolog|ProGuard)$/i) {
@@ -4504,7 +4654,9 @@ sub top_level_SMB_dir {                      # {{{1
 }
 # 1}}}
 sub replace_git_hash_with_tarfile {          # {{{1
-    my ($ra_arg_list,) = @_;  # in   file name, directory name and/or git commit hash to examine
+    my ($ra_arg_list,             # in  file name, directory name and/or
+                                  #     git commit hash to examine
+        $ra_git_similarity) = @_; # out only if --opt-git-diff-simindex
     # replace git hashes in $ra_arg_list with tar files
     # Diff mode and count mode behave differently:
     #   Diff:
@@ -4578,6 +4730,9 @@ sub replace_git_hash_with_tarfile {          # {{{1
     # logic for each of the modes
     if ($opt_diff) {
 #print "A DIFF\n";
+        # set the default git diff algorithm
+        $opt_git_diff_rel = 1 unless $opt_git_diff_all or
+                                     $opt_git_diff_simindex;
         # is it git to git, or git to file/dir ?
         my ($Left, $Right) = @{$ra_arg_list};
 
@@ -4590,20 +4745,32 @@ sub replace_git_hash_with_tarfile {          # {{{1
             # first make a union of all files that have changed in both commits
             my %files_union = ();
 
-            # Strategy 1:  Union files are what git consinders have changed
-            #              between the two commits.
-##          my $git_list_cmd = "git diff-tree -r --no-commit-id --name-only $Left $Right";
-##          print "$git_list_cmd\n" if $opt_v;
-##          foreach my $file (`$git_list_cmd`) {
-##              chomp($file);
-##              $files_union{$file} = 1;
-##          }
+            my @left_files  = ();
+            my @right_files = ();
+            if ($opt_git_diff_rel) {
+                # Strategy 1:  Union files are what git consinders have changed
+                #              between the two commits.
+                my $git_list_cmd = "git diff-tree -r --no-commit-id --name-only $Left $Right";
+                # print "$git_list_cmd\n" if $opt_v;
+                foreach my $file (`$git_list_cmd`) {
+                    chomp($file);
+                    $files_union{$file} = 1;
+                }
+            } elsif ($opt_git_diff_all) {
+                # Strategy 2:  Union files all files in both repos.
+                foreach my $file (keys %{$repo_listing{$Left }},
+                                  keys %{$repo_listing{$Right}}) {
+                   $files_union{$file} = 1;
+                }
+            } elsif ($opt_git_diff_simindex) {
+                # Strategy 3:  Use git's own similarity index to figure
+                #              out which files to compare.
+                git_similarity_index($Left              , # in
+                                     $Right             , # in
+                                    \@left_files        , # out
+                                    \@right_files       , # out
+                                     $ra_git_similarity); # out
 
-            # Strategy 2:  Union files all files that have changed in both
-            #              commits.
-            foreach my $file (keys %{$repo_listing{$Left }},
-                              keys %{$repo_listing{$Right}}) {
-                $files_union{$file} = 1;
             }
 
 #use Data::Dumper;
@@ -4612,8 +4779,6 @@ sub replace_git_hash_with_tarfile {          # {{{1
 
             # then make trucated tar files of those union files which
             # actually exist in each repo
-            my @left_files  = ();
-            my @right_files = ();
             foreach my $file (sort keys %files_union) {
                 push @left_files , $file if $repo_listing{$Left }{$file};
                 push @right_files, $file if $repo_listing{$Right}{$file};
@@ -4622,7 +4787,13 @@ sub replace_git_hash_with_tarfile {          # {{{1
 
 #           my @Lfiles= map {$_ =~ s/([\s\(\)\[\]{}';\^\$\?])/\\$1/g; $_}   @left_files;
 #           my @Lfiles= @left_files;
-            $replacement_arg_list{$git_hash{$Left}}  = git_archive($Left , \@left_files);
+            if(scalar(@left_files) > 0) {
+                $replacement_arg_list{$git_hash{$Left}}  = git_archive($Left , \@left_files);
+            } else {
+                # In the right side commit ONLY file(s) was added, so no file(s) will exist in the left side commit.
+                # Create empty TAR to detect added lines of code.
+                $replacement_arg_list{$git_hash{$Left}} = empty_tar();
+            }
 #           $replacement_arg_list{$git_hash{$Left}}  = git_archive($Left , \@Lfiles);
 #           my @Rfiles= map {$_ =~ s/([\s\(\)\[\]{}';\^\$\?])/\\$1/g; $_}   @right_files ;
 #           my @Rfiles= @right_files ;
@@ -4630,7 +4801,14 @@ sub replace_git_hash_with_tarfile {          # {{{1
 #print Dumper('left' , \@left_files);
 #print Dumper('right', \@right_files);
 #die;
-            $replacement_arg_list{$git_hash{$Right}} = git_archive($Right, \@right_files);
+
+            if(scalar(@right_files) > 0) {
+                $replacement_arg_list{$git_hash{$Right}} = git_archive($Right, \@right_files);
+            } else {
+                 # In the left side commit ONLY file(s) was deleted, so file(s) will not exist in right side commit.
+                 # Create empty TAR to detect removed lines of code.
+                 $replacement_arg_list{$git_hash{$Right}} = empty_tar();
+            }
 #           $replacement_arg_list{$git_hash{$Right}} = git_archive($Right, \@Rfiles);
 #write_file("/tmp/Lfiles.txt", {}, sort @Lfiles);
 #write_file("/tmp/Rfiles.txt", {}, sort @Rfiles);
@@ -4674,6 +4852,41 @@ sub replace_git_hash_with_tarfile {          # {{{1
 
 #print "ra_arg_list 2: @{$ra_arg_list}\n";
     print "<- replace_git_hash_with_tarfile()\n" if $opt_v > 2;
+} # 1}}}
+sub git_similarity_index {                   # {{{
+    my ($git_hash_Left    ,       # in
+        $git_hash_Right   ,       # in
+        $ra_left_files    ,       # out
+        $ra_right_files   ,       # out
+        $ra_git_similarity) = @_; # out
+    die "this option is not yet implemented";
+    print "-> git_similarity_index($git_hash_Left, $git_hash_Right)\n" if $opt_v > 2;
+    my $cmd = "git diff -M --name-status $git_hash_Left $git_hash_Right";
+    print  $cmd, "\n" if $opt_v;
+    open(GSIM, "$cmd |") or die "Unable to run $cmd  $!";
+    while (<GSIM>) {
+        print "git similarity> $_";
+    }
+    close(GSIM);
+    print "<- git_similarity_index\n" if $opt_v > 2;
+} # 1}}}
+sub empty_tar {                              # {{{1
+    my ($Tarfh, $Tarfile);
+    if ($opt_sdir) {
+      File::Path::mkpath($opt_sdir) unless is_dir($opt_sdir);
+      ($Tarfh, $Tarfile) = tempfile(UNLINK => 1, DIR => $opt_sdir, SUFFIX => $ON_WINDOWS ? '.zip' : '.tar');  # delete on exit
+    } else {
+      ($Tarfh, $Tarfile) = tempfile(UNLINK => 1, SUFFIX => $ON_WINDOWS ? '.zip' : '.tar');  # delete on exit
+    }
+    my $cmd = $ON_WINDOWS ? "type nul > $Tarfile" : "tar -cf $Tarfile -T /dev/null";
+    print  $cmd, "\n" if $opt_v;
+    system $cmd;
+    if (!-r $Tarfile) {
+        # not readable
+        die "Failed to create empty tarfile.";
+    }
+
+    return $Tarfile;
 } # 1}}}
 sub git_archive {                            # {{{1
     # Invoke 'git archive' as a system command to create a tar file
@@ -4735,7 +4948,13 @@ sub git_archive {                            # {{{1
 
     my $files_this_commit = join(" ", @{$File_Set[0]});
     print "   git_archive(file_set[0]=$files_this_commit)\n" if $opt_v > 2;
-    my ($Tarfh, $Tarfile) = tempfile(UNLINK => 1, SUFFIX => $ON_WINDOWS ? '.zip' : '.tar');  # delete on exit
+    my ($Tarfh, $Tarfile);
+    if ($opt_sdir) {
+      File::Path::mkpath($opt_sdir) unless is_dir($opt_sdir);
+      ($Tarfh, $Tarfile) = tempfile(UNLINK => 1, DIR => $opt_sdir, SUFFIX => $ON_WINDOWS ? '.zip' : '.tar');  # delete on exit
+    } else {
+      ($Tarfh, $Tarfile) = tempfile(UNLINK => 1, SUFFIX => $ON_WINDOWS ? '.zip' : '.tar');  # delete on exit
+    }
     my $cmd = "git archive -o $Tarfile $files_this_commit";
     print  $cmd, "\n" if $opt_v;
     system $cmd;
@@ -4760,7 +4979,7 @@ sub git_archive {                            # {{{1
     print "<- git_archive()\n" if $opt_v > 2;
     return $Tarfile
 } # 1}}}
-sub smaller {                                                  # {{{1
+sub smaller {                                # {{{1
     my( $a, $b ) = @_;
     return $a < $b ? $a : $b;
 } # 1}}}
@@ -5324,6 +5543,8 @@ sub classify_file {                          # {{{1
                 return Lisp_or_Julia( $full_file, $rh_Err, $raa_errors);
             } elsif ($Language_by_Extension{$extension} eq 'Perl/Prolog') {
                 return Perl_or_Prolog($full_file, $rh_Err, $raa_errors);
+            } elsif ($Language_by_Extension{$extension} eq 'Raku/Prolog') {
+                return Raku_or_Prolog($full_file, $rh_Err, $raa_errors);
             } elsif ($Language_by_Extension{$extension} eq
                      'IDL/Qt Project/Prolog/ProGuard') {
                 return IDL_or_QtProject($full_file, $rh_Err, $raa_errors);
@@ -5416,9 +5637,9 @@ sub classify_file {                          # {{{1
         # starts with pound bang:
         #   #!/usr/bin/perl
         #   #!/usr/bin/env perl
-        my $script_language = peek_at_first_line($full_file ,
-                                                 $rh_Err    ,
-                                                 $raa_errors);
+        my ($script_language, $L) = peek_at_first_line($full_file ,
+                                                       $rh_Err    ,
+                                                       $raa_errors);
         if (!$script_language) {
             $rh_ignored->{$full_file} = "language unknown (#2)";
             # returns (unknown)
@@ -5435,7 +5656,15 @@ sub classify_file {                          # {{{1
                 # returns (unknown)
             }
         } else {
-            $rh_ignored->{$full_file} = "language unknown (#3)";
+            # #456:  XML files can have a variety of domain-specific file
+            #        extensions.  If the extension is unrecognized, examine
+            #        the first line of the file to see if it is XML
+            if ($L =~ /<\?xml\s/) {
+                $language = "XML";
+                delete $rh_ignored->{$full_file};
+            } else {
+                $rh_ignored->{$full_file} = "language unknown (#3)";
+            }
             # returns (unknown)
         }
     }
@@ -5493,7 +5722,7 @@ sub peek_at_first_line {                     # {{{1
         }
     }
     print "<- peek_at_first_line($file)\n" if $opt_v > 2;
-    return $script_language;
+    return ($script_language, $first_line);
 } # 1}}}
 sub different_files {                        # {{{1
     # See which of the given files are unique by computing each file's MD5
@@ -5779,6 +6008,67 @@ sub write_file {                             # {{{1
 
     print "<- write_file\n" if $opt_v > 2;
 } # 1}}}
+sub file_pairs_from_file {                   # {{{1
+    my ($file             , # in
+        $ra_added         , # out
+        $ra_removed       , # out
+        $ra_compare_list  , # out
+       ) = @_;
+    #
+    # Example valid input format for $file
+    # 1)
+	#   A/d1/hello.f90 | B/d1/hello.f90
+	#   A/hello.C | B/hello.C
+	#   A/d2/hi.py | B/d2/hi.py
+    #
+    # 2)
+	# Files added: 1
+	#   + B/extra_file.pl ; Perl
+	# 
+	# Files removed: 1
+	#   - A/d2/hello.java ; Java
+	# 
+	# File pairs compared: 3
+	#   != A/d1/hello.f90 | B/d1/hello.f90 ; Fortran 90
+	#   != A/hello.C | B/hello.C ; C++
+	#   == A/d2/hi.py | B/d2/hi.py ; Python
+
+    print "-> file_pairs_from_file($file)\n" if $opt_v and $opt_v > 2;
+    @{$ra_compare_list} = ();
+    my @lines = read_file($file);
+    my $mode = "compare";
+    foreach my $L (@lines) {
+        next if $L =~ /^\s*$/ or $L =~ /^\s*#/;
+		chomp($L);
+        if      ($L =~ /^Files\s+(added|removed):/) {
+            $mode = $1;
+        } elsif ($L =~ /^File\s+pairs\s+compared:/) {
+    		$mode = "compare";
+        } elsif ($mode eq "added" or $mode eq "removed") {
+            $L =~ m/^\s*[+-]\s+(.*?)\s+;/;
+            my $F = $1;
+            if (!defined $1) {
+                warn "file_pairs_from_file($file) parse failure\n",
+                     "in $mode mode for '$L', ignoring\n";
+                next;
+            }
+            if ($mode eq "added") {
+                push @{$ra_added}  , $F;
+            } else {
+                push @{$ra_removed}, $F;
+            }
+        } else {
+    		$L =~ m/^\s*([!=]=\s*)?(.*?)\s*\|\s*(.*?)\s*(;.*?)?$/;
+            if (!defined $2 or !defined $3) {
+                warn "file_pairs_from_file($file) parse failure\n",
+                     "in compare mode for '$L', ignoring\n";
+                next;
+            }
+            push @{$ra_compare_list}, ( [$2, $3] );
+        }
+    }
+    print "<- file_pairs_from_file\n" if $opt_v and $opt_v > 2;
+}
 sub read_file  {                             # {{{1
     my ($file, ) = @_;
     my %BoM = (
@@ -6945,12 +7235,16 @@ sub set_constants {                          # {{{1
             'master'      => 'ASP.NET'               ,
             'sitemap'     => 'ASP.NET'               ,
             'cshtml'      => 'Razor'                 ,
+            'razor'       => 'Razor'                 , # Client-side Blazor
             'nawk'        => 'awk'                   ,
             'mawk'        => 'awk'                   ,
             'gawk'        => 'awk'                   ,
             'auk'         => 'awk'                   ,
             'awk'         => 'awk'                   ,
             'bash'        => 'Bourne Again Shell'    ,
+            'bzl'         => 'Bazel'                 ,
+            'bazel'       => 'Bazel'                 ,
+            'BUILD'       => 'Bazel'                 ,
             'vbhtml'      => 'Visual Basic'          ,
             'frx'         => 'Visual Basic'          ,
             'bas'         => 'Visual Basic'          ,
@@ -6979,6 +7273,7 @@ sub set_constants {                          # {{{1
             'tpp'         => 'C++'                   ,
             'tcc'         => 'C++'                   ,
             'ipp'         => 'C++'                   ,
+            'inl'         => 'C++'                   ,
             'h++'         => 'C++'                   ,
             'C'           => 'C++'                   ,
             'cc'          => 'C++'                   ,
@@ -7028,6 +7323,7 @@ sub set_constants {                          # {{{1
             'da'          => 'DAL'                   ,
             'dart'        => 'Dart'                  ,
             'def'         => 'Windows Module Definition',
+            'dhall'       => 'dhall'                 ,
             'dt'          => 'DIET'                  ,
             'patch'       => 'diff'                  ,
             'diff'        => 'diff'                  ,
@@ -7319,6 +7615,7 @@ sub set_constants {                          # {{{1
             'nim.cfg'     => 'Nim'                   ,
             'nim'         => 'Nim'                   ,
             'nix'         => 'Nix'                   ,
+            'nut'         => 'Squirrel'              ,
             'oscript'     => 'LiveLink OScript'      ,
             'bod'         => 'Oracle PL/SQL'         ,
             'spc'         => 'Oracle PL/SQL'         ,
@@ -7354,11 +7651,14 @@ sub set_constants {                          # {{{1
             'pig'         => 'Pig Latin'             ,
             'plh'         => 'Perl'                  ,
             'pl'          => 'Perl/Prolog'           ,
-            'p6'          => 'Perl/Prolog'           ,
             'PL'          => 'Perl/Prolog'           ,
+            'p6'          => 'Raku/Prolog'           ,
+            'P6'          => 'Raku/Prolog'           ,
             'plx'         => 'Perl'                  ,
             'pm'          => 'Perl'                  ,
-            'pm6'         => 'Perl'                  ,
+            'pm6'         => 'Raku'                  ,
+            'raku'        => 'Raku'                  ,
+            'rakumod'     => 'Raku'                  ,
             'pom.xml'     => 'Maven'                 ,
             'pom'         => 'Maven'                 ,
             'yap'         => 'Prolog'                ,
@@ -7502,7 +7802,6 @@ sub set_constants {                          # {{{1
             'sch'         => 'Scheme'                ,
             'sls'         => 'Scheme/SaltStack'      ,
             'sld'         => 'Scheme'                ,
-            'tsv'         => 'RobotFramework'        ,
             'robot'       => 'RobotFramework'        ,
             'rc'          => 'Windows Resource File' ,
             'rc2'         => 'Windows Resource File' ,
@@ -7523,9 +7822,11 @@ sub set_constants {                          # {{{1
             'spc.sql'     => 'SQL Stored Procedure'  ,
             'udf.sql'     => 'SQL Stored Procedure'  ,
             'data.sql'    => 'SQL Data'              ,
+            'sss'         => 'SugarSS'               ,
             'st'          => 'Smalltalk'             ,
             'styl'        => 'Stylus'                ,
             'i'           => 'SWIG'                  ,
+            'svelte'      => 'Svelte'                ,
             'sv'          => 'Verilog-SystemVerilog' ,
             'svh'         => 'Verilog-SystemVerilog' ,
             'svg'         => 'SVG'                   ,
@@ -7752,7 +8053,6 @@ sub set_constants {                          # {{{1
             'make'     => 'make'                  ,
             'octave'   => 'Octave'                ,
             'perl5'    => 'Perl'                  ,
-            'perl6'    => 'Perl'                  ,
             'perl'     => 'Perl'                  ,
             'miniperl' => 'Perl'                  ,
             'php'      => 'PHP'                   ,
@@ -7767,6 +8067,9 @@ sub set_constants {                          # {{{1
             'python3.6'=> 'Python'                ,
             'python3.7'=> 'Python'                ,
             'python3.8'=> 'Python'                ,
+            'perl6'    => 'Raku'                  ,
+            'raku'     => 'Raku'                  ,
+            'rakudo'   => 'Raku'                  ,
             'rexx'     => 'Rexx'                  ,
             'regina'   => 'Rexx'                  ,
             'ruby'     => 'Ruby'                  ,
@@ -7782,6 +8085,8 @@ sub set_constants {                          # {{{1
 # 1}}}
 %{$rh_Language_by_File}      = (             # {{{1
             'build.xml'         => 'Ant/XML'            ,
+            'BUILD'             => 'Bazel'              ,
+            'WORKSPACE'         => 'Bazel'              ,
             'CMakeLists.txt'    => 'CMake'              ,
             'Jamfile'           => 'Jam'                ,
             'Jamrules'          => 'Jam'                ,
@@ -7880,6 +8185,10 @@ sub set_constants {                          # {{{1
                                 [ 'remove_matches'      , '^\s*#'  ],
                                 [ 'remove_inline'       , '#.*$'   ],
                             ],
+    'Bazel'              => [
+                                [ 'remove_matches'      , '^\s*#'  ],
+                                [ 'remove_inline'       , '#.*$'   ],
+                            ],
     'bc'                 => [
                                 [ 'remove_matches'      , '^\s*#'  ],
                                 [ 'remove_inline'       , '#.*$'   ],
@@ -7932,7 +8241,10 @@ sub set_constants {                          # {{{1
                                 [ 'rm_comments_in_strings', '"', '//', '' ],
                                 [ 'call_regexp_common'  , 'C++'    ],
                             ],
-    'Clojure'            => [   [ 'remove_matches'      , '^\s*;'  ], ],
+    'Clojure'            => [
+                                [ 'remove_matches'      , '^\s*;'  ],
+                                [ 'remove_matches'      , '^\s*#_'  ],
+                            ],
     'ClojureScript'      => [   [ 'remove_matches'      , '^\s*;'  ], ],
     'ClojureC'           => [   [ 'remove_matches'      , '^\s*;'  ], ],
     'CMake'              => [
@@ -8014,6 +8326,7 @@ sub set_constants {                          # {{{1
                                 [ 'rm_comments_in_strings', '"', '//', '' ],
                                 [ 'call_regexp_common'  , 'C++'    ],
                             ],
+    'dhall'              => [   [ 'remove_haskell_comments', '>filename<' ], ],
     'DIET'               => [  # same as Pug
                                 [ 'remove_pug_block'    ,          ],
                                 [ 'remove_matches'      , '^\s*//' ],
@@ -8316,6 +8629,8 @@ sub set_constants {                          # {{{1
                                 [ 'call_regexp_common'  , 'C++'    ],
                             ],
     'JavaScript'         => [
+                                [ 'rm_comments_in_strings', "'", '/*', '*/' ],
+                                [ 'rm_comments_in_strings', "'", '//', '' ],
                                 [ 'rm_comments_in_strings', '"', '/*', '*/' ],
                                 [ 'rm_comments_in_strings', '"', '//', '' ],
                                 [ 'call_regexp_common'  , 'C++'    ],
@@ -8604,6 +8919,12 @@ sub set_constants {                          # {{{1
                                 [ 'remove_matches'      , '^\s*;'  ],
                                 [ 'remove_inline'       , ';.*$'   ],
                             ],
+    'Raku'               => [   [ 'remove_matches'      , '^\s*#'  ],
+                                [ 'remove_below_above'  , '^=head1', '^=cut'  ],
+                                [ 'remove_below_above'  , '^=begin', '^=end'  ],
+                                [ 'remove_inline'       , '#.*$'   ],
+                            ],
+    'Raku/Prolog'        => [ [ 'die' ,          ], ], # never called
     'RAML'               => [
                                 [ 'remove_matches'      , '^\s*#'  ],
                                 [ 'remove_inline'       , '#.*$'   ],
@@ -8669,6 +8990,10 @@ sub set_constants {                          # {{{1
                                 [ 'remove_matches'      , '^\s*;'  ],
                                 [ 'remove_inline'       , ';.*$'   ],
                             ],
+    'sed'                => [
+                                [ 'remove_matches'      , '^\s*#'  ],
+                                [ 'remove_inline'       , '#.*$'   ],
+                            ],
     'Slice'             => [
                                 [ 'rm_comments_in_strings', '"', '/*', '*/' ],
                                 [ 'rm_comments_in_strings', '"', '//', '' ],
@@ -8684,6 +9009,13 @@ sub set_constants {                          # {{{1
     'SKILL++'            => [
                                 [ 'call_regexp_common'  , 'C'      ],
                                 [ 'remove_matches'      , '^\s*;'  ],
+                            ],
+    'Squirrel'           => [
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C++'    ],
+                                [ 'remove_matches'      , '^\s*#'  ],
+                                [ 'remove_inline'       , '#.*$'   ],
                             ],
     'Starlark'           => [
                                 [ 'remove_matches'      , '^\s*#'  ],
@@ -8725,10 +9057,6 @@ sub set_constants {                          # {{{1
                                 [ 'remove_matches'      , '^\s*--' ],
                                 [ 'remove_inline'       , '--.*$'  ],
                             ],
-    'sed'                => [
-                                [ 'remove_matches'      , '^\s*#'  ],
-                                [ 'remove_inline'       , '#.*$'   ],
-                            ],
     'Smalltalk'          => [
                                 [ 'call_regexp_common'  , 'Smalltalk'      ],
                             ],
@@ -8748,6 +9076,15 @@ sub set_constants {                          # {{{1
                                 [ 'rm_comments_in_strings', '"', '/*', '*/' ],
                                 [ 'rm_comments_in_strings', '"', '//', '' ],
                                 [ 'call_regexp_common'  , 'C++'    ],
+                            ],
+    'SugarSS'            => [
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C++'    ],
+                            ],
+    'Svelte'             => [
+                                [ 'remove_html_comments',          ],
+                                [ 'call_regexp_common'  , 'HTML'   ],
                             ],
     'SVG'                => [
                                 [ 'remove_html_comments',          ],
@@ -9117,6 +9454,7 @@ sub set_constants {                          # {{{1
    'tfm'       => 1,
    'tgz'       => 1,  # gzipped tarball
    'tiff'      => 1,
+   'tsv'       => 1,  # tab separated values
    'txt'       => 1,
    'vf'        => 1,
    'wav'       => 1,
@@ -9245,6 +9583,7 @@ sub set_constants {                          # {{{1
     'base sas'                     =>   1.51,
     'basic'                        =>   0.75,
     'basic a'                      =>   0.63,
+    'Bazel'                        =>   1.00,
     'bc'                           =>   1.50,
     'berkeley pascal'              =>   0.88,
     'better basic'                 =>   0.88,
@@ -9269,7 +9608,7 @@ sub set_constants {                          # {{{1
     'cellsim'                      =>   1.74,
     'ColdFusion'                   =>   4.00,
     'ColdFusion CFScript'          =>   4.00,
-    'Chapel'                       =>   2.96,  # estimate from some test code bases comparing to Python
+    'Chapel'                       =>   2.96,
     'chili'                        =>   0.75,
     'chill'                        =>   0.75,
     'cics'                         =>   1.74,
@@ -9333,6 +9672,7 @@ sub set_constants {                          # {{{1
     'decision support default'     =>   2.22,
     'decrally'                     =>   2.00,
     'delphi'                       =>   2.76,
+    'dhall'                        =>   2.11,
     'DITA'                         =>   1.90,
     'dl/1'                         =>   2.00,
     'dtrace'                       =>   2.00,
@@ -9669,6 +10009,7 @@ sub set_constants {                          # {{{1
     'R'                            =>   3.00,
     'Rmd'                          =>   3.00,
     'Racket'                       =>   1.50,
+    'Raku'                         =>   4.00,
     'rally'                        =>   2.00,
     'ramis ii'                     =>   2.00,
     'RAML'                         =>   0.90,
@@ -9745,6 +10086,7 @@ sub set_constants {                          # {{{1
     'Specman e'                    =>   2.00,
     'SQL'                          =>   2.29,
     'sqlwindows'                   =>   6.67,
+    'Squirrel'                     =>   2.50,
     'statistical default'          =>   2.50,
     'Standard ML'                  =>   3.00,
     'Stata'                        =>   3.00,
@@ -9753,8 +10095,10 @@ sub set_constants {                          # {{{1
     'strongly typed default'       =>   0.88,
     'style'                        =>   1.74,
     'Stylus'                       =>   1.48,
+    'SugarSS'                      =>   2.50,
     'superbase 1.3'                =>   2.22,
     'surpass'                      =>  13.33,
+    'Svelte'                       =>   2.00,
     'SVG'                          =>   1.00,
     'Swift'                        =>   2.50,
     'SWIG'                         =>   2.50,
@@ -9894,6 +10238,7 @@ sub set_constants {                          # {{{1
     'PHP/Pascal'                      => 1.00,
     'Pascal/Puppet'                   => 1.00,
     'Perl/Prolog'                     => 1.00,
+    'Raku/Prolog'                     => 1.00,
     'Verilog-SystemVerilog/Coq'    => 1.00,
     'MATLAB/Mathematica/Objective C/MUMPS/Mercury' => 1.00,
     'IDL/Qt Project/Prolog/ProGuard'     => 1.00,
@@ -12689,19 +13034,22 @@ sub array_diff {                             # {{{1
         } elsif ($flag eq '+') {  # + = added
             ++$n_R;
             if ($COMMENT_MODE) {
-                # should never get here
-                @{$rah_diff_L} = ();
-                @{$rah_diff_R} = ();
-                push @{$raa_Errors},
-                     [ $Error_Codes{'Diff error (quoted comments?)'}, $file ];
+                # should never get here, but may due to sdiff() bug,
+                # ref https://rt.cpan.org/Public/Bug/Display.html?id=131629
+                # Rather than failing, ignore and continue.  A possible
+                # consequence is counts may be inconsistent.
+#####           @{$rah_diff_L} = ();
+#####           @{$rah_diff_R} = ();
+#####           push @{$raa_Errors},
+#####                [ $Error_Codes{'Diff error (quoted comments?)'}, $file ];
                 if ($opt_v) {
                   warn "array_diff: diff failure (diff says the\n";
                   warn "comment-free file has added lines).\n";
                   warn "$n_sdiff  $line_L\n";
                 }
-                last;
             }
-            $rah_diff_L->[$n_sdiff]{type} = "nonexist";
+####        $rah_diff_L->[$n_sdiff]{type} = "nonexist";
+            $rah_diff_L->[$n_sdiff]{type} = "comment";
             $rah_diff_L->[$n_sdiff]{desc} = "removed";
             $rah_diff_R->[$n_sdiff]{desc} = "added";
             $rah_diff_R->[$n_sdiff]{lnum} = $n_R;
@@ -13327,9 +13675,15 @@ sub uncompress_archive_cmd {                 # {{{1
 # 1}}}
 sub read_list_file {                         # {{{1
     my ($file, ) = @_;
+    # reads filenames from a STDIN pipe if $file == "-"
 
     print "-> read_list_file($file)\n" if $opt_v > 2;
-    my $IN = new IO::File $file, "r";
+    my $IN;
+    if ($file eq "-") {
+        open($IN, $file);
+    } else {
+        $IN = new IO::File $file, "r";
+    }
     if (!defined $IN) {
         warn "Unable to read $file; ignoring.\n";
         return ();
@@ -13900,7 +14254,7 @@ sub really_is_D {                            # {{{1
         $raa_errors  , # out
        ) = @_;
     print "-> really_is_D($file)\n" if $opt_v > 2;
-    my $possible_script = peek_at_first_line($file, $rh_Err, $raa_errors);
+    my ($possible_script, $L) = peek_at_first_line($file, $rh_Err, $raa_errors);
 
     print "<- really_is_D($file)\n" if $opt_v > 2;
     return $possible_script;    # null string if D, otherwise a language
