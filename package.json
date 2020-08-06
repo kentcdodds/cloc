@@ -3,10 +3,6 @@
   "version": "0.0.0-development",
   "description": "An npm module for distributing cloc by Al Danial https://github.com/AlDanial/cloc",
   "main": "lib/cloc",
-  "scripts": {
-    "test": "echo \"Error: no test specified\"",
-    "semantic-release": "semantic-release pre && npm publish && semantic-release post"
-  },
   "bin": {
     "cloc": "lib/cloc"
   },
@@ -26,7 +22,4 @@
     "url": "https://github.com/kentcdodds/cloc/issues"
   },
   "homepage": "https://github.com/kentcdodds/cloc#readme",
-  "devDependencies": {
-    "semantic-release": "^6.3.2"
-  }
 }
