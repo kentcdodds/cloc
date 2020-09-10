@@ -2,7 +2,7 @@
 
 ![Screenshot](other/screenshot.png)
 
-This is just an npm distribution of the amazing [cloc](https://github.com/AlDanial/cloc) by [Al Danial](pontifespresso).
+This is just an npm distribution of the amazing [cloc](https://github.com/AlDanial/cloc) by [Al Danial](https://twitter.com/pontifespresso).
 [I](https://twitter.com/kentcdodds) created this package because I think `cloc` is awesome, but didn't want to download
 the file and commit it to my project.
 
