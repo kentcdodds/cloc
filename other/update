@@ -1,0 +1,1 @@
+curl -L https://github.com/AlDanial/cloc/releases/download/$1/cloc-$1.pl --output ./lib/cloc

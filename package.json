@@ -21,5 +21,8 @@
   "bugs": {
     "url": "https://github.com/kentcdodds/cloc/issues"
   },
-  "homepage": "https://github.com/kentcdodds/cloc#readme"
+  "homepage": "https://github.com/kentcdodds/cloc#readme",
+  "scripts": {
+    "update": "./other/update"
+  }
 }

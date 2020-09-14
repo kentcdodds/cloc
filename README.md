@@ -2,9 +2,11 @@
 
 ![Screenshot](other/screenshot.png)
 
-This is just an npm distribution of the amazing [cloc](https://github.com/AlDanial/cloc) by [Al Danial](https://twitter.com/pontifespresso).
-[I](https://twitter.com/kentcdodds) created this package because I think `cloc` is awesome, but didn't want to download
-the file and commit it to my project.
+This is just an npm distribution of the amazing
+[cloc](https://github.com/AlDanial/cloc) by
+[Al Danial](https://twitter.com/pontifespresso).
+[I](https://twitter.com/kentcdodds) created this package because I think `cloc`
+is awesome, but didn't want to download the file and commit it to my project.
 
 # Installation and Requirements
 
@@ -12,27 +14,40 @@ the file and commit it to my project.
 
 ### Perl
 
-`cloc` is written in perl and the binary that this package exposes is the `cloc` perl script. You must have perl installed on your machine for this binary to work.
+`cloc` is written in perl and the binary that this package exposes is the `cloc`
+perl script. You must have perl installed on your machine for this binary to
+work.
 
 ### Node & npm
 
-This is distributed as an `npm` package (some say that stands for "Node Package Manager"). So you must have Node.js and npm installed.
- 
-Here are quick instructions on how to get those: http://blog.nodeknockout.com/post/65463770933/how-to-install-node-js-and-npm
+This is distributed as an `npm` package (some say that stands for "Node Package
+Manager"). So you must have Node.js and npm installed.
 
-Congratulations, you've opened your life to a whole new world of awesome tooling and other cool things :-)
+Here are quick instructions on how to get those:
+http://blog.nodeknockout.com/post/65463770933/how-to-install-node-js-and-npm
+
+Congratulations, you've opened your life to a whole new world of awesome tooling
+and other cool things :-)
 
 ## Installation
 
-Install this tool via `npm`: `$ npm install -g cloc`
+The recommended usage is temporary installation using `npx`:
+
+```
+npx cloc [options]
+```
+
+However, you can also install it globally or locally to a project.
+[Learn more](https://flaviocopes.com/npm-packages-local-global/)
 
 # Usage
 
-In your terminal, simply type `cloc` to get output of the options available.
+In your terminal, simply type `npx cloc` to get output of the options available.
 
-See the official [cloc](http://cloc.sourceforge.net/) website for documentation on how to use `cloc`.
+See the official [cloc](http://cloc.sourceforge.net/) website for documentation
+on how to use `cloc`.
 
-Here's the output when you type `cloc`:
+Here's the output when you run `cloc`:
 
 ```
 Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
@@ -367,29 +382,20 @@ Usage: cloc [options] <file(s)/dir(s)> | <set 1> <set 2> | <report files>
    --yaml                    Write the results in YAML.
 ```
 
-## Locally in a project
+## Development
 
-I use this in my project to keep track of my lines of code as the project grows (mostly for fun). Here's what I do:
+To update the `cloc` version, run:
 
-1. Install it as one of your `devDependencies` with `$ npm i -D cloc`
-2. Add this to your `package.json`:
-
-```javascript
-{
-  // your other config stuff
-  "scripts": {
-    "count": "cloc app/" // <-- other options would go here as well...
-  },
-  "devDependencies": {
-    "cloc": "2.0.0" // <-- this should be added automatically when you install with the `-D` flag
-  }
-  // more config stuff
-}
+```
+npm run update -- VERSION
 ```
 
-3. Whenever you want to count your lines of code, simply enter: `$ npm run count`
+For example:
+
+```
+npm run update -- 1.88
+```
 
 # LICENSE
 
 This package is and the `cloc` cli itself is licensed with GPL 2.
-
