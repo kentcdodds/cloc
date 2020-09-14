@@ -29,7 +29,7 @@
 # <http://www.gnu.org/licenses/gpl.txt>.
 #
 # 1}}}
-my $VERSION = "1.86";  # odd number == beta; even number == stable
+my $VERSION = "1.88";  # odd number == beta; even number == stable
 my $URL     = "github.com/AlDanial/cloc";  # 'https://' pushes header too wide
 require 5.006;
 # use modules                                  {{{1
@@ -210,7 +210,7 @@ Usage: $script [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <repo
                              --diff-alignment.  (Run with that option to
                              see a sample.)  The language identifier at the
                              end of each line is ignored.  This enables --diff
-                             mode and by-passes file pair alignment logic.
+                             mode and bypasses file pair alignment logic.
    --vcs=<VCS>               Invoke a system call to <VCS> to obtain a list of
                              files to work on.  If <VCS> is 'git', then will
                              invoke 'git ls-files' to get a file list and
@@ -301,7 +301,7 @@ Usage: $script [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <repo
                              then use these filters instead of the built-in
                              filters.  Note:  languages which map to the same
                              file extension (for example:
-                             MATLAB/Mathematica/Objective C/MUMPS/Mercury;
+                             MATLAB/Mathematica/Objective-C/MUMPS/Mercury;
                              Pascal/PHP; Lisp/OpenCL; Lisp/Julia; Perl/Prolog)
                              will be ignored as these require additional
                              processing that is not expressed in language
@@ -1136,7 +1136,7 @@ my %Extension_Collision = (
     'IDL/Qt Project/Prolog/ProGuard'                => [ 'pro'  ] ,
     'Lisp/Julia'                                    => [ 'jl'   ] ,
     'Lisp/OpenCL'                                   => [ 'cl'   ] ,
-    'MATLAB/Mathematica/Objective C/MUMPS/Mercury'  => [ 'm'    ] ,
+    'MATLAB/Mathematica/Objective-C/MUMPS/Mercury'  => [ 'm'    ] ,
     'Pascal/Puppet'                                 => [ 'pp'   ] ,
     'Perl/Prolog'                                   => [ 'pl', 'PL'  ] ,
     'PHP/Pascal'                                    => [ 'inc'  ] ,
@@ -1590,14 +1590,21 @@ if ($opt_diff_list_file) {
                         \@file_pairs_tot    , # out
                        );
     foreach my $F (@files_added_tot) {
+        $F = lc $F if $ON_WINDOWS;
 		push @{$files_for_set[1]}, $F;
 	}
     foreach my $F (@files_removed_tot) {
+        $F = lc $F if $ON_WINDOWS;
 		push @{$files_for_set[0]}, $F;
 	}
     foreach my $pair (@file_pairs_tot) {
-		push @{$files_for_set[0]}, $pair->[0];
-		push @{$files_for_set[1]}, $pair->[1];
+        if ($ON_WINDOWS) {
+            push @{$files_for_set[0]}, lc $pair->[0];
+            push @{$files_for_set[1]}, lc $pair->[1];
+        } else {
+            push @{$files_for_set[0]}, $pair->[0];
+            push @{$files_for_set[1]}, $pair->[1];
+        }
 	}
 	@ARGV = (1, 2); # place holders
 }
@@ -2280,8 +2287,14 @@ sub count_filesets {                         # {{{1
         next if $opt_include_lang
             and not $Include_Language{$Language{$fset_b}{$f}};
         my $this_lang = $Language{$fset_b}{$f};
+        if (!defined  $Language{$fset_b}{$f}) {
+            # shouldn't happen but could get here if using
+            # --diff-list-file which bypasses earlier checks
+            $p_ignored{$f} = "empty or uncharacterizeable file";
+            next;
+        }
         if ($this_lang eq "(unknown)") {
-            $p_ignored{$f} = "uknown language";
+            $p_ignored{$f} = "unknown language";
             next;
         }
         if ($Exclude_Language{$this_lang}) {
@@ -2320,7 +2333,7 @@ sub count_filesets {                         # {{{1
              or  not defined $Include_Language{$Language{$fset_a}{$f}});
         my $this_lang = $Language{$fset_a}{$f};
         if ($this_lang eq "(unknown)") {
-            $p_ignored{$f} = "uknown language";
+            $p_ignored{$f} = "unknown language";
             next;
         }
         if ($Exclude_Language{$this_lang}) {
@@ -4503,12 +4516,12 @@ sub print_language_info {                    # {{{1
     }
 
     # add exceptions (one file extension mapping to multiple languages)
-    if (!$language or $language =~ /^(Objective C|MATLAB|Mathematica|MUMPS|Mercury)$/i) {
-        push @{$extensions{'Objective C'}}, "m";
+    if (!$language or $language =~ /^(Objective-C|MATLAB|Mathematica|MUMPS|Mercury)$/i) {
+        push @{$extensions{'Objective-C'}}, "m";
         push @{$extensions{'MATLAB'}}     , "m";
         push @{$extensions{'Mathematica'}}, "m";
         push @{$extensions{'MUMPS'}}      , "m";
-        delete $extensions{'MATLAB/Mathematica/Objective C/MUMPS/Mercury'};
+        delete $extensions{'MATLAB/Mathematica/Objective-C/MUMPS/Mercury'};
     }
     if (!$language or $language =~ /^(Lisp|OpenCL)$/i) {
         push @{$extensions{'Lisp'}}  , "cl";
@@ -4676,7 +4689,7 @@ sub replace_git_hash_with_tarfile {          # {{{1
     #            git archive -o tarfile2 *git_hash2* \
     #               <union of files that changed and exist in this commit>
     #          To avoid "Argument list too long" error, repeat the git
-    #          achive step with chunks of 30,000 files at a time then
+    #          archive step with chunks of 30,000 files at a time then
     #          merge the tar files as the final step.
     #   Regular count:
     #       Simply make a tar file of all files in the git repo.
@@ -4685,7 +4698,7 @@ sub replace_git_hash_with_tarfile {          # {{{1
     print "-> replace_git_hash_with_tarfile($prt_args)\n" if $opt_v > 2;
 #print "ra_arg_list 1: @{$ra_arg_list}\n";
 
-    my $hash_regex = qr/^([a-f\d]{5,40}|master|HEAD)$/;
+    my $hash_regex = qr/^([a-f\d]{5,40}|master|HEAD)(~\d+)?$/;
     my %replacement_arg_list = ();
 
     # early exit if none of the inputs look like git hashes
@@ -4777,7 +4790,7 @@ sub replace_git_hash_with_tarfile {          # {{{1
 #print "files_union =\n", Dumper(\%files_union);
 #print "repo_listing=\n", Dumper(\%repo_listing);
 
-            # then make trucated tar files of those union files which
+            # then make truncated tar files of those union files which
             # actually exist in each repo
             foreach my $file (sort keys %files_union) {
                 push @left_files , $file if $repo_listing{$Left }{$file};
@@ -5009,7 +5022,6 @@ sub make_file_list {                         # {{{1
 
     my @dir_list = ();
     foreach my $file_or_dir (@{$ra_arg_list}) {
-#print "make_file_list file_or_dir=$file_or_dir\n";
         my $size_in_bytes = 0;
         if (!-r $file_or_dir) {
             push @{$raa_errors}, [$rh_Err->{'Unable to read'} , $file_or_dir];
@@ -5086,6 +5098,7 @@ sub make_file_list {                         # {{{1
     my $nFiles_Categorized = 0;
 
     foreach my $file (@file_list) {
+        $file = lc $file if $ON_WINDOWS;
         printf "classifying $file\n" if $opt_v > 2;
 
         my $basename = basename $file;
@@ -5503,7 +5516,7 @@ sub classify_file {                          # {{{1
         }
         if (defined $Language_by_Extension{$extension}) {
             if ($Language_by_Extension{$extension} eq
-                'MATLAB/Mathematica/Objective C/MUMPS/Mercury') {
+                'MATLAB/Mathematica/Objective-C/MUMPS/Mercury') {
                 my $lang_M_or_O = "";
                 matlab_or_objective_C($full_file ,
                                       $rh_Err    ,
@@ -7246,8 +7259,11 @@ sub set_constants {                          # {{{1
             'bazel'       => 'Bazel'                 ,
             'BUILD'       => 'Bazel'                 ,
             'vbhtml'      => 'Visual Basic'          ,
+            'VBHTML'      => 'Visual Basic'          ,
             'frx'         => 'Visual Basic'          ,
+            'FRX'         => 'Visual Basic'          ,
             'bas'         => 'Visual Basic'          ,
+            'BAS'         => 'Visual Basic'          ,
             'dxl'         => 'DOORS Extension Language',
             'bat'         => 'DOS Batch'             ,
             'BAT'         => 'DOS Batch'             ,
@@ -7512,6 +7528,8 @@ sub set_constants {                          # {{{1
             'jsf'         => 'JavaServer Faces'      ,
             'jsx'         => 'JSX'                   ,
             'xhtml'       => 'XHTML'                 ,
+            'jinja'       => 'Jinja Template'        ,
+            'jinja2'      => 'Jinja Template'        ,
             'yyp'         => 'JSON'                  ,
             'webmanifest' => 'JSON'                  ,
             'webapp'      => 'JSON'                  ,
@@ -7552,6 +7570,7 @@ sub set_constants {                          # {{{1
             'liquid'      => 'liquid'                ,
             'lsp'         => 'Lisp'                  ,
             'lisp'        => 'Lisp'                  ,
+            'll'          => 'LLVM IR'               ,
             'lgt'         => 'Logtalk'               ,
             'logtalk'     => 'Logtalk'               ,
             'wlua'        => 'Lua'                   ,
@@ -7580,6 +7599,8 @@ sub set_constants {                          # {{{1
             'mc'          => 'Windows Message File'  ,
             'met'         => 'Teamcenter met'        ,
             'mg'          => 'Modula3'               ,
+            'mojom'       => 'Mojo'                  ,
+            'meson.build' => 'Meson'                 ,
             'mk'          => 'make'                  ,
 #           'mli'         => 'ML'                    , # ML not implemented
 #           'ml'          => 'ML'                    ,
@@ -7590,8 +7611,8 @@ sub set_constants {                          # {{{1
             'mli'         => 'OCaml'                 ,
             'mly'         => 'OCaml'                 ,
             'mll'         => 'OCaml'                 ,
-            'm'           => 'MATLAB/Mathematica/Objective C/MUMPS/Mercury' ,
-            'mm'          => 'Objective C++'         ,
+            'm'           => 'MATLAB/Mathematica/Objective-C/MUMPS/Mercury' ,
+            'mm'          => 'Objective-C++'         ,
             'msg'         => 'Gencat NLS'            ,
             'nbp'         => 'Mathematica'           ,
             'mathematica' => 'Mathematica'           ,
@@ -7616,6 +7637,7 @@ sub set_constants {                          # {{{1
             'nim'         => 'Nim'                   ,
             'nix'         => 'Nix'                   ,
             'nut'         => 'Squirrel'              ,
+            'odin'        => 'Odin'                  ,
             'oscript'     => 'LiveLink OScript'      ,
             'bod'         => 'Oracle PL/SQL'         ,
             'spc'         => 'Oracle PL/SQL'         ,
@@ -7901,6 +7923,8 @@ sub set_constants {                          # {{{1
             'VBS'         => 'Visual Basic'          ,
             'vue'         => 'Vuejs Component'       ,
             'webinfo'     => 'ASP.NET'               ,
+            'x'           => 'Logos'                 ,
+            'xm'          => 'Logos'                 ,
             'xmi'         => 'XMI'                   ,
             'XMI'         => 'XMI'                   ,
             'zcml'        => 'XML'                   ,
@@ -7914,9 +7938,11 @@ sub set_constants {                          # {{{1
             'xacro'       => 'XML'                   ,
             'x3d'         => 'XML'                   ,
             'wsf'         => 'XML'                   ,
-            'web.release.config'=> 'XML'                   ,
-            'web.debug.config'=> 'XML'                   ,
+            'web.release.config'=> 'XML'             ,
+            'web.debug.config'=> 'XML'               ,
             'web.config'  => 'XML'                   ,
+            'wxml'        => 'WXML'                  ,
+            'wxss'        => 'WXSS'                  ,
             'vxml'        => 'XML'                   ,
             'vstemplate'  => 'XML'                   ,
             'vssettings'  => 'XML'                   ,
@@ -7926,7 +7952,7 @@ sub set_constants {                          # {{{1
             'urdf'        => 'XML'                   ,
             'tmtheme'     => 'XML'                   ,
             'tmsnippet'   => 'XML'                   ,
-            'tmpreferences'=> 'XML'                   ,
+            'tmpreferences'=> 'XML'                  ,
             'tmlanguage'  => 'XML'                   ,
             'tml'         => 'XML'                   ,
             'tmcommand'   => 'XML'                   ,
@@ -8092,6 +8118,7 @@ sub set_constants {                          # {{{1
             'Jamrules'          => 'Jam'                ,
             'Makefile'          => 'make'               ,
             'makefile'          => 'make'               ,
+            'meson.build'       => 'Meson'              ,
             'gnumakefile'       => 'make'               ,
             'Gnumakefile'       => 'make'               ,
             'pom.xml'           => 'Maven/XML'          ,
@@ -8635,6 +8662,9 @@ sub set_constants {                          # {{{1
                                 [ 'rm_comments_in_strings', '"', '//', '' ],
                                 [ 'call_regexp_common'  , 'C++'    ],
                             ],
+    'Jinja Template'     => [
+                                [ 'remove_between_general', '{#', '#}' ],
+                            ],
     'JSX'                => [
                                 [ 'rm_comments_in_strings', '"', '/*', '*/' ],
                                 [ 'rm_comments_in_strings', '"', '//', '' ],
@@ -8690,6 +8720,14 @@ sub set_constants {                          # {{{1
     'Lisp/OpenCL'        => [ [ 'die' ,          ], ], # never called
     'Lisp/Julia'         => [ [ 'die' ,          ], ], # never called
     'LiveLink OScript'   => [   [ 'remove_matches'      , '^\s*//' ], ],
+    'LLVM IR'            => [
+                                [ 'remove_matches'      , '^\s*;'  ],
+                                [ 'remove_inline'       , ';.*$'   ],
+                            ],
+    'Logos'              => [
+                                [ 'remove_matches'      , '^\s*#'  ],
+                                [ 'remove_inline'       , '#.*$'   ],
+                            ],
     'Logtalk'            => [  # same filters as Prolog
                                 [ 'remove_matches'      , '^\s*\%' ],
                                 [ 'call_regexp_common'  , 'C'      ],
@@ -8709,7 +8747,12 @@ sub set_constants {                          # {{{1
                                 [ 'remove_matches'      , '^\s*#'  ],
                                 [ 'remove_inline'       , '#.*$'   ],
                             ],
+    'Meson'              => [
+                                [ 'remove_matches'      , '^\s*#'  ],
+                                [ 'remove_inline'       , '#.*$'   ],
+                            ],
     'MATLAB'             => [
+                                [ 'remove_between_general', '%{', '%}' ],
                                 [ 'remove_matches'      , '^\s*%'  ],
                                 [ 'remove_inline'       , '%.*$'   ],
                             ],
@@ -8731,18 +8774,19 @@ sub set_constants {                          # {{{1
     'Modula3'            => [   [ 'call_regexp_common'  , 'Pascal' ], ],
         # Modula 3 comments are (* ... *) so applying the Pascal filter
         # which also treats { ... } as a comment is not really correct.
+    'Mojo'               => [   [ 'call_regexp_common' , 'C++' ], ],
     'Nemerle'            => [
                                 [ 'rm_comments_in_strings', '"', '/*', '*/' ],
                                 [ 'rm_comments_in_strings', '"', '//', '' ],
                                 [ 'call_regexp_common'  , 'C++'    ],
                             ],
-    'Objective C'        => [
+    'Objective-C'        => [
 #                               [ 'remove_matches'      , '^\s*//' ],
                                 [ 'rm_comments_in_strings', '"', '/*', '*/' ],
                                 [ 'rm_comments_in_strings', '"', '//', '' ],
                                 [ 'call_regexp_common'  , 'C++'    ],
                             ],
-    'Objective C++'      => [
+    'Objective-C++'      => [
 #                               [ 'remove_matches'      , '^\s*//' ],
                                 [ 'rm_comments_in_strings', '"', '/*', '*/' ],
                                 [ 'rm_comments_in_strings', '"', '//', '' ],
@@ -8765,7 +8809,7 @@ sub set_constants {                          # {{{1
                                   '\[(comment|\/\/)?\]\s*:?\s*(<\s*>|#)?\s*\(.*?', '.*?\)' ],
                                 # http://stackoverflow.com/questions/4823468/comments-in-markdown
                             ],
-    'MATLAB/Mathematica/Objective C/MUMPS/Mercury' => [ [ 'die' ,          ], ], # never called
+    'MATLAB/Mathematica/Objective-C/MUMPS/Mercury' => [ [ 'die' ,          ], ], # never called
     'MUMPS'              => [   [ 'remove_matches'      , '^\s*;'  ], ],
     'Mustache'           => [
                                 [ 'remove_between_general', '{{!', '}}' ],
@@ -8785,6 +8829,11 @@ sub set_constants {                          # {{{1
     'Octave'             => [
                                 [ 'remove_matches'      , '^\s*#'  ],
                                 [ 'remove_inline'       , '#.*$'   ],
+                            ],
+    'Odin'               => [
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C++'    ],
                             ],
     'Oracle Forms'       => [   [ 'call_regexp_common'  , 'C'      ], ],
     'Oracle Reports'     => [   [ 'call_regexp_common'  , 'C'      ], ],
@@ -9305,6 +9354,15 @@ sub set_constants {                          # {{{1
                                 [ 'remove_html_comments',          ],
                                 [ 'call_regexp_common'  , 'HTML'   ],
                             ],
+    'WXML'               => [
+                                [ 'remove_html_comments',          ],
+                                [ 'call_regexp_common'  , 'HTML'   ],
+                            ],
+    'WXSS'               => [
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C'      ],
+                            ],
     'XMI'                => [
                                 [ 'remove_html_comments',          ],
                                 [ 'call_regexp_common'  , 'HTML'   ],
@@ -9369,9 +9427,10 @@ sub set_constants {                          # {{{1
     'Lua'                =>     '\\\\$'         ,
     'make'               =>     '\\\\$'         ,
     'MATLAB'             =>     '\.\.\.\s*$'    ,
+    'Meson'              =>     '\\\\$'         ,
     'MXML'               =>     '\\\\$'         ,
-    'Objective C'        =>     '\\\\$'         ,
-    'Objective C++'      =>     '\\\\$'         ,
+    'Objective-C'        =>     '\\\\$'         ,
+    'Objective-C++'      =>     '\\\\$'         ,
     'OCaml'              =>     '\\\\$'         ,
     'Octave'             =>     '\.\.\.\s*$'    ,
     'Qt Project'         =>     '\\\\$'         ,
@@ -9830,6 +9889,7 @@ sub set_constants {                          # {{{1
     'Java'                         =>   1.36,
     'JavaScript'                   =>   1.48,
     'JavaServer Faces'             =>   1.5 ,
+    'Jinja Template'               =>   1.5 ,
     'JSON'                         =>   2.50,
     'JSON5'                        =>   2.50,
     'JSP'                          =>   1.48,
@@ -9863,7 +9923,9 @@ sub set_constants {                          # {{{1
     'liquid'                       =>   3.00,
     'Lisp'                         =>   1.25,
     'LiveLink OScript'             =>   3.5 ,
+    'LLVM IR'                      =>   0.90,
     'loglisp'                      =>   1.38,
+    'Logos'                        =>   2.00,
     'Logtalk'                      =>   2.00,
     'loops'                        =>   3.81,
     'lotus 123 dos'                =>  13.33,
@@ -9892,6 +9954,7 @@ sub set_constants {                          # {{{1
     'mdl'                          =>   2.22,
     'mentor'                       =>   1.51,
     'mesa'                         =>   0.75,
+    'Meson'                        =>   1.00,
     'microfocus cobol'             =>   1.00,
     'microforth'                   =>   1.25,
     'microsoft c'                  =>   0.63,
@@ -9927,11 +9990,12 @@ sub set_constants {                          # {{{1
     'object logo'                  =>   2.76,
     'object pascal'                =>   2.76,
     'object star'                  =>   5.00,
-    'Objective C'                  =>   2.96,
-    'Objective C++'                =>   2.96,
+    'Objective-C'                  =>   2.96,
+    'Objective-C++'                =>   2.96,
     'objectoriented default'       =>   2.76,
     'objectview'                   =>   3.20,
     'OCaml'                        =>   3.00,
+    'Odin'                         =>   2.00,
     'ogl'                          =>   1.00,
     'omnis 7'                      =>   2.00,
     'oodl'                         =>   2.76,
@@ -10191,6 +10255,8 @@ sub set_constants {                          # {{{1
     'WiX include'                  =>   1.90,
     'WiX string localization'      =>   1.90,
     'wizard'                       =>   2.86,
+    'WXML'                         =>   1.90,
+    'WXSS'                         =>   1.00,
     'xBase'                        =>   2.00,
     'xBase Header'                 =>   2.00,
     'xlisp'                        =>   1.25,
@@ -10216,6 +10282,7 @@ sub set_constants {                          # {{{1
     'Octave'                       => 4.00,
     'ML'                           => 3.00,
     'Modula3'                      => 2.00,
+    'Mojo'                         => 2.00,
     'PHP'                          => 3.50,
     'Jupyter Notebook'             => 4.20,
     'Python'                       => 4.20,
@@ -10240,7 +10307,7 @@ sub set_constants {                          # {{{1
     'Perl/Prolog'                     => 1.00,
     'Raku/Prolog'                     => 1.00,
     'Verilog-SystemVerilog/Coq'    => 1.00,
-    'MATLAB/Mathematica/Objective C/MUMPS/Mercury' => 1.00,
+    'MATLAB/Mathematica/Objective-C/MUMPS/Mercury' => 1.00,
     'IDL/Qt Project/Prolog/ProGuard'     => 1.00,
 );
 # 1}}}
@@ -12029,7 +12096,7 @@ sub plural_form {                            # {{{1
     else         { return ($n, "s"); }
 } # 1}}}
 sub matlab_or_objective_C {                  # {{{1
-    # Decide if code is MATLAB, Mathematica, Objective C, MUMPS, or Mercury
+    # Decide if code is MATLAB, Mathematica, Objective-C, MUMPS, or Mercury
     my ($file        , # in
         $rh_Err      , # in   hash of error codes
         $raa_errors  , # out
@@ -12041,7 +12108,7 @@ sub matlab_or_objective_C {                  # {{{1
     #   some lines start with "%"
     #   high marks for lines that start with [
     #
-    # Objective C markers:
+    # Objective-C markers:
     #   must have at least two brace characters, { }
     #   has /* ... */ style comments
     #   some lines start with @
@@ -12103,14 +12170,14 @@ printf ".m:  \\w \\w  obj C=% 2d  matlab=% 2d  mumps=% 2d  mercury= % 2d\n", $ob
 printf ".m:  ;      obj C=% 2d  matlab=% 2d  mumps=% 2d  mercury= % 2d\n", $objective_C_points, $matlab_points, $mathematica_points, $mumps_points, $mercury_points if $DEBUG;
         }
         if (m{^\s*#(include|import)}) {
-            # Objective C without a doubt
+            # Objective-C without a doubt
             $objective_C_points = 1000;
             $matlab_points      = 0;
 printf ".m: #includ obj C=% 2d  matlab=% 2d  mumps=% 2d  mercury= % 2d\n", $objective_C_points, $matlab_points, $mathematica_points, $mumps_points, $mercury_points if $DEBUG;
             $has_braces         = 2;
             last;
         } elsif (m{^\s*@(interface|implementation|protocol|public|protected|private|end)\s}o) {
-            # Objective C without a doubt
+            # Objective-C without a doubt
             $objective_C_points = 1000;
             $matlab_points      = 0;
 printf ".m: keyword obj C=% 2d  matlab=% 2d  mumps=% 2d  mercury= % 2d\n", $objective_C_points, $matlab_points, $mathematica_points, $mumps_points, $mercury_points if $DEBUG;
@@ -12143,7 +12210,7 @@ printf "END LOOP    obj C=% 2d  matlab=% 2d  mumps=% 2d  mercury= % 2d\n", $obje
     my %points = ( 'MATLAB'      => $matlab_points     ,
                    'Mathematica' => $mathematica_points     ,
                    'MUMPS'       => $mumps_points      ,
-                   'Objective C' => $objective_C_points,
+                   'Objective-C' => $objective_C_points,
                    'Mercury'     => $mercury_points    , );
 
     ${$rs_language} = (sort { $points{$b} <=> $points{$a} or $a cmp $b } keys %points)[0];
@@ -12257,6 +12324,19 @@ sub Perl_or_Prolog {                         # {{{1
 
     printf "<- Perl_or_Prolog(%s, Perl=%d Prolog=%d)\n",
         $file, $perl_points, $prolog_points if $opt_v > 2;
+    return $lang;
+} # 1}}}
+sub Raku_or_Prolog {                         # {{{1
+    my ($file        , # in
+        $rh_Err      , # in   hash of error codes
+        $raa_errors  , # out
+       ) = @_;
+
+    print "-> Raku_or_Prolog\n" if $opt_v > 2;
+    my $lang = Perl_or_Prolog($file, $rh_Err, $raa_errors);
+    $lang = "Raku" if $lang eq "Perl";
+
+    print "<- Raku_or_Prolog\n" if $opt_v > 2;
     return $lang;
 } # 1}}}
 sub IDL_or_QtProject {                       # {{{1
@@ -13351,6 +13431,11 @@ sub align_by_pairs {                         # {{{1
     my @files_L = sort keys %{$rh_file_list_L};
     my @files_R = sort keys %{$rh_file_list_R};
     return () unless @files_L or  @files_R;  # at least one must have stuff
+    if ($ON_WINDOWS or $opt_ignore_case_ext) {
+        foreach (@files_L) { $_ = lc $_; }
+        foreach (@files_R) { $_ = lc $_; }
+    }
+
     if      ( @files_L and !@files_R) {
         # left side has stuff, right side is empty; everything deleted
         @{$ra_added   }     = ();
@@ -13581,7 +13666,26 @@ sub unicode_to_ascii {                       # {{{1
     else                   { return '' }  # neither big or little endian UTF-16
 
     my @ascii              = ();
-    for (my $i = $offset; $i < $length; $i += 2) { push @ascii, $unicode[$i]; }
+    for (my $i = $offset; $i < $length; $i += 2) {
+        # some compound characters are made of HT (9), LF (10), or CR (13)
+        # True HT, LF, CR are followed by 00; only add those.
+        my $L = $unicode[$i];
+        if (ord($L) == 9 or ord($L) == 10 or ord($L) == 13) {
+            my $companion;
+            if ($points_1) {
+                $companion = $unicode[$i+1];
+            } else {
+                $companion = $unicode[$i-1];
+            }
+            if (ord($companion) == 0) {
+                push @ascii, $L;
+            } else {
+                push @ascii, " ";  # no clue what this letter is
+            }
+        } else {
+            push @ascii, $L;
+        }
+    }
     return join("", @ascii);
 } # 1}}}
 sub uncompress_archive_cmd {                 # {{{1
@@ -13678,24 +13782,32 @@ sub read_list_file {                         # {{{1
     # reads filenames from a STDIN pipe if $file == "-"
 
     print "-> read_list_file($file)\n" if $opt_v > 2;
-    my $IN;
-    if ($file eq "-") {
-        open($IN, $file);
-    } else {
-        $IN = new IO::File $file, "r";
-    }
-    if (!defined $IN) {
-        warn "Unable to read $file; ignoring.\n";
-        return ();
-    }
     my @entry = ();
-    while (<$IN>) {
-        next if /^\s*$/ or /^\s*#/; # skip empty or commented lines
-        s/\cM$//;  # DOS to Unix
-        chomp;
-        push @entry, $_;
+
+    if ($file eq "-") {
+        # read from a STDIN pipe
+        my $IN;
+        open($IN, $file);
+        if (!defined $IN) {
+            warn "Unable to read $file; ignoring.\n";
+            return ();
+        }
+        while (<$IN>) {
+            next if /^\s*$/ or /^\s*#/; # skip empty or commented lines
+            s/\cM$//;  # DOS to Unix
+            chomp;
+            push @entry, $_;
+        }
+        $IN->close;
+    } else {
+        # read from an actual file
+        foreach my $line (read_file($file)) {
+            next if $line =~ /^\s*$/ or $line =~ /^\s*#/;
+            $line =~ s/\cM$//;  # DOS to Unix
+            chomp $line;
+            push @entry, $line;
+        }
     }
-    $IN->close;
 
     print "<- read_list_file\n" if $opt_v > 2;
     return @entry;
@@ -14427,106 +14539,109 @@ sub load_from_config_file {                  # {{{1
     }
     print "Reading options from $config_file.\n" if defined $opt_v;
 
+    my $has_force_lang = @{$ra_force_lang};
+    my $has_script_lang = @{$ra_script_lang};
     my @lines = read_file($config_file);
     foreach (@lines) {
         next if /^\s*$/ or /^\s*#/;
         s/\s*--//;
-        if      (!defined ${$rs_by_file}             and /by_file|by-file/)                              { ${$rs_by_file}            = 1;
-        } elsif (!defined ${$rs_by_file_by_lang}     and /by_file_by_lang|by-file-by-lang/)              { ${$rs_by_file_by_lang}    = 1;
-        } elsif (!defined ${$rs_categorized}         and /categorized(=|\s+)(.*?)$/)                     { ${$rs_categorized}        = $2;
-        } elsif (!defined ${$rs_counted}             and /counted(=|\s+)(.*?)$/)                         { ${$rs_counted}            = $2;
-        } elsif (!defined ${$rs_include_ext}         and /include_ext|include-ext(=|\s+)(.*?)$/)         { ${$rs_include_ext}        = $2;
-        } elsif (!defined ${$rs_include_lang}        and /include_lang|include-lang(=|\s+)(.*?)$/)       { ${$rs_include_lang}       = $2;
-        } elsif (!defined ${$rs_exclude_content}     and /exclude_content|exclude-content(=|\s+)(.*?)$/) { ${$rs_exclude_content}    = $2;
-        } elsif (!defined ${$rs_exclude_lang}        and /exclude_lang|exclude-lang(=|\s+)(.*?)$/)       { ${$rs_exclude_lang}       = $2;
-        } elsif (!defined ${$rs_exclude_dir}         and /exclude_dir|exclude-dir(=|\s+)(.*?)$/)         { ${$rs_exclude_dir}        = $2;
-        } elsif (!defined ${$rs_explain}             and /explain(=|\s+)(.*?)$/)                         { ${$rs_explain}            = $2;
-        } elsif (!defined ${$rs_extract_with}        and /extract_with|extract-with(=|\s+)(.*?)$/)       { ${$rs_extract_with}       = $2;
-        } elsif (!defined ${$rs_found}               and /found(=|\s+)(.*?)$/)                           { ${$rs_found}              = $2;
-        } elsif (!defined ${$rs_count_diff}          and /count_and_diff|count-and-diff/)                { ${$rs_count_diff}         = 1;
-        } elsif (!defined ${$rs_diff}                and /diff/)                                         { ${$rs_diff}               = 1;
-        } elsif (!defined ${$rs_diff_alignment}      and /diff-alignment|diff_alignment(=|\s+)(.*?)$/)   { ${$rs_diff_alignment}     = $2;
-        } elsif (!defined ${$rs_diff_timeout}        and /diff-timeout|diff_timeout(=|\s+)i/)            { ${$rs_diff_timeout}       = $1;
-        } elsif (!defined ${$rs_timeout}             and /timeout(=|\s+)i/)                              { ${$rs_timeout}            = $1;
-        } elsif (!defined ${$rs_html}                and /html/)                                         { ${$rs_html}               = 1;
-        } elsif (!defined ${$rs_ignored}             and /ignored(=|\s+)(.*?)$/)                         { ${$rs_ignored}            = $2;
-        } elsif (!defined ${$rs_quiet}               and /quiet/)                                        { ${$rs_quiet}              = 1;
-        } elsif (!defined ${$rs_force_lang_def}      and /force_lang_def|force-lang-def(=|\s+)(.*?)$/)   { ${$rs_force_lang_def}     = $2;
-        } elsif (!defined ${$rs_read_lang_def}       and /read_lang_def|read-lang-def(=|\s+)(.*?)$/)     { ${$rs_read_lang_def}      = $2;
-        } elsif (!defined ${$rs_progress_rate}       and /progress_rate|progress-rate(=|\s+)(\d+)/)      { ${$rs_progress_rate}      = $2;
-        } elsif (!defined ${$rs_print_filter_stages} and /print_filter_stages|print-filter-stages/)      { ${$rs_print_filter_stages}= 1;
-        } elsif (!defined ${$rs_report_file}         and /report_file|report-file(=|\s+)(.*?)$/)         { ${$rs_report_file}        = $2;
-        } elsif (!defined ${$rs_report_file}         and /out(=|\s+)(.*?)$/)                             { ${$rs_report_file}        = $2;
-        } elsif (!defined ${$rs_sdir}                and /sdir(=|\s+)(.*?)$/)                            { ${$rs_sdir}               = $2;
-        } elsif (!defined ${$rs_skip_uniqueness}     and /skip_uniqueness|skip-uniqueness/)              { ${$rs_skip_uniqueness}    = 1;
-        } elsif (!defined ${$rs_strip_comments}      and /strip_comments|strip-comments(=|\s+)(.*?)$/)   { ${$rs_strip_comments}     = $2;
-        } elsif (!defined ${$rs_original_dir}        and /original_dir|original-dir/)                    { ${$rs_original_dir}       = 1;
-        } elsif (!defined ${$rs_sum_reports}         and /sum_reports|sum-reports/)                      { ${$rs_sum_reports}        = 1;
-        } elsif (!defined ${$rs_hide_rate}           and /hid_rate|hide-rate/)                           { ${$rs_hide_rate}          = 1;
-        } elsif (!defined ${$rs_processes}           and /processes(=|\s+)(\d+)/)                        { ${$rs_processes}          = $2;
-        } elsif (!defined ${$rs_unicode}             and /unicode/)                                      { ${$rs_unicode}            = 1;
-        } elsif (!defined ${$rs_3}                   and /3/)                                            { ${$rs_3}                  = 1;
-        } elsif (!defined ${$rs_vcs}                 and /vcs(=|\s+)s/)                                  { ${$rs_vcs}                = $2;
-        } elsif (!defined ${$rs_version}             and /version/)                                      { ${$rs_version}            = 1;
-        } elsif (!defined ${$rs_write_lang_def}      and /write_lang_def|write-lang-def(=|\s+)(.*?)$/)   { ${$rs_write_lang_def}     = $2;
-        } elsif (!defined ${$rs_write_lang_def_incl_dup} and /write_lang_def_incl_dup|write-lang-def-incl-dup(=|\s+)(.*?)$/) { ${$rs_write_lang_def_incl_dup} = $2;
-        } elsif (!defined ${$rs_xml}                 and /xml/)                                          { ${$rs_xml}                = 1;
-        } elsif (!defined ${$rs_xsl}                 and /xsl(=|\s+)(.*?)$/)                             { ${$rs_xsl}                = $2;
-        } elsif (!defined ${$rs_lang_no_ext}         and /lang_no_ext|lang-no-ext(=|\s+)(.*?)$/)         { ${$rs_lang_no_ext}        = $2;
-        } elsif (!defined ${$rs_yaml}                and /yaml/)                                         { ${$rs_yaml}               = 1;
-        } elsif (!defined ${$rs_csv}                 and /csv/)                                          { ${$rs_csv}                = 1;
-        } elsif (!defined ${$rs_csv_delimiter}       and /csv_delimeter|csv-delimiter(=|\s+)(.*?)$/)     { ${$rs_csv_delimiter}      = $2;
-        } elsif (!defined ${$rs_json}                and /json/)                                         { ${$rs_json}               = 1;
-        } elsif (!defined ${$rs_md}                  and /md/)                                           { ${$rs_md}                 = 1;
-        } elsif (!defined ${$rs_fullpath}            and /fullpath/)                                     { ${$rs_fullpath}           = 1;
-        } elsif (!defined ${$rs_match_f}             and /match_f|match-f(=|\s+)(.*?)$/)                 { ${$rs_match_f}            = $2;
-        } elsif (!defined ${$rs_not_match_f}         and /not_match_f|not-match-f(=|\s+)(.*?)$/)         { ${$rs_not_match_f}        = $2;
-        } elsif (!defined ${$rs_match_d}             and /match_d|match-d(=|\s+)(.*?)$/)                 { ${$rs_match_d}            = $2;
-        } elsif (!defined ${$rs_not_match_d}         and /not_match_d|not-match-d(=|\s+)(.*?)$/)         { ${$rs_not_match_d}        = $2;
-        } elsif (!defined ${$rs_list_file}           and /list_file|list-file(=|\s+)(.*?)$/)             { ${$rs_list_file}          = $2;
-        } elsif (!defined ${$rs_help}                and /help/)                                         { ${$rs_help}               = 1;
-        } elsif (!defined ${$rs_skip_win_hidden}     and /skip_win_hidden|skip-win-hidden/)              { ${$rs_skip_win_hidden}    = 1;
-        } elsif (!defined ${$rs_read_binary_files}   and /read_binary_files|read-binary-files/)          { ${$rs_read_binary_files}  = 1;
-        } elsif (!defined ${$rs_sql}                 and /sql(=|\s+)(.*?)$/)                             { ${$rs_sql}                = $2;
-        } elsif (!defined ${$rs_sql_project}         and /sql_project|sql-project(=|\s+)(.*?)$/)         { ${$rs_sql_project}        = $2;
-        } elsif (!defined ${$rs_sql_append}          and /sql_append|sql-append/)                        { ${$rs_sql_append}         = 1;
-        } elsif (!defined ${$rs_sql_style}           and /sql_style|sql-style(=|\s+)(.*?)$/)             { ${$rs_sql_style}          = $2;
-        } elsif (!defined ${$rs_inline}              and /inline/)                                       { ${$rs_inline}             = 1;
-        } elsif (!defined ${$rs_exclude_ext}         and /exclude_ext|exclude-ext(=|\s+)(.*?)$/)         { ${$rs_exclude_ext}        = $2;
-        } elsif (!defined ${$rs_ignore_whitespace}   and /ignore_whitespace|ignore-whitespace/)          { ${$rs_ignore_whitespace}  = 1;
-        } elsif (!defined ${$rs_ignore_case_ext}     and /ignore_case_ext|ignore-case-ext/)              { ${$rs_ignore_case_ext}    = 1;
-        } elsif (!defined ${$rs_ignore_case}         and /ignore_case|ignore-case/)                      { ${$rs_ignore_case}        = 1;
-        } elsif (!defined ${$rs_follow_links}        and /follow_links|follow-links/)                    { ${$rs_follow_links}       = 1;
-        } elsif (!defined ${$rs_autoconf}            and /autoconf/)                                     { ${$rs_autoconf}           = 1;
-        } elsif (!defined ${$rs_sum_one}             and /sum_one|sum-one/)                              { ${$rs_sum_one}            = 1;
-        } elsif (!defined ${$rs_by_percent}          and /by_percent|by-percent(=|\s+)(.*?)$/)           { ${$rs_by_percent}         = $2;
-        } elsif (!defined ${$rs_stdin_name}          and /stdin_name|stdin-name(=|\s+)(.*?)$/)           { ${$rs_stdin_name}         = $2;
-        } elsif (!defined ${$rs_force_on_windows}    and /windows/)                                      { ${$rs_force_on_windows}   = 1;
-        } elsif (!defined ${$rs_force_on_unix}       and /unix/)                                         { ${$rs_force_on_unix}      = 1;
-        } elsif (!defined ${$rs_show_os}             and /show_os|show-os/)                              { ${$rs_show_os}            = 1;
-        } elsif (!defined ${$rs_skip_archive}        and /skip_archive|skip-archive(=|\s+)(.*?)$/)       { ${$rs_skip_archive}       = $2;
-        } elsif (!defined ${$rs_max_file_size}       and /max_file_size|max-file-size(=|\s+)(\d+)/)      { ${$rs_max_file_size}      = $2;
-        } elsif (!defined ${$rs_use_sloccount}       and /use_sloccount|use-sloccount/)                  { ${$rs_use_sloccount}      = 1;
-        } elsif (!defined ${$rs_no_autogen}          and /no_autogen|no-autogen/)                        { ${$rs_no_autogen}         = 1;
-        } elsif (!defined ${$rs_force_git}           and /git/)                                          { ${$rs_force_git}          = 1;
-        } elsif (!defined ${$rs_exclude_list_file}   and /exclude_list_file|exclude-list-file(=|\s+)(.*?)$/)
+        s/^\s+//;
+        if      (!defined ${$rs_by_file}             and /^(by_file|by-file)/)                                { ${$rs_by_file}            = 1;
+        } elsif (!defined ${$rs_by_file_by_lang}     and /^(by_file_by_lang|by-file-by-lang)/)                { ${$rs_by_file_by_lang}    = 1;
+        } elsif (!defined ${$rs_categorized}         and /^categorized(=|\s+)(.*?)$/)                         { ${$rs_categorized}        = $2;
+        } elsif (!defined ${$rs_counted}             and /^counted(=|\s+)(.*?)$/)                             { ${$rs_counted}            = $2;
+        } elsif (!defined ${$rs_include_ext}         and /^(?:include_ext|include-ext)(=|\s+)(.*?)$/)         { ${$rs_include_ext}        = $2;
+        } elsif (!defined ${$rs_include_lang}        and /^(?:include_lang|include-lang)(=|\s+)(.*?)$/)       { ${$rs_include_lang}       = $2;
+        } elsif (!defined ${$rs_exclude_content}     and /^(?:exclude_content|exclude-content)(=|\s+)(.*?)$/) { ${$rs_exclude_content}    = $2;
+        } elsif (!defined ${$rs_exclude_lang}        and /^(?:exclude_lang|exclude-lang)(=|\s+)(.*?)$/)       { ${$rs_exclude_lang}       = $2;
+        } elsif (!defined ${$rs_exclude_dir}         and /^(?:exclude_dir|exclude-dir)(=|\s+)(.*?)$/)         { ${$rs_exclude_dir}        = $2;
+        } elsif (!defined ${$rs_explain}             and /^explain(=|\s+)(.*?)$/)                             { ${$rs_explain}            = $2;
+        } elsif (!defined ${$rs_extract_with}        and /^(?:extract_with|extract-with)(=|\s+)(.*?)$/)       { ${$rs_extract_with}       = $2;
+        } elsif (!defined ${$rs_found}               and /^found(=|\s+)(.*?)$/)                               { ${$rs_found}              = $2;
+        } elsif (!defined ${$rs_count_diff}          and /^(count_and_diff|count-and-diff)/)                  { ${$rs_count_diff}         = 1;
+        } elsif (!defined ${$rs_diff}                and /^diff/)                                             { ${$rs_diff}               = 1;
+        } elsif (!defined ${$rs_diff_alignment}      and /^(?:diff-alignment|diff_alignment)(=|\s+)(.*?)$/)   { ${$rs_diff_alignment}     = $2;
+        } elsif (!defined ${$rs_diff_timeout}        and /^(?:diff-timeout|diff_timeout)(=|\s+)i/)            { ${$rs_diff_timeout}       = $1;
+        } elsif (!defined ${$rs_timeout}             and /^timeout(=|\s+)i/)                                  { ${$rs_timeout}            = $1;
+        } elsif (!defined ${$rs_html}                and /^html/)                                             { ${$rs_html}               = 1;
+        } elsif (!defined ${$rs_ignored}             and /^ignored(=|\s+)(.*?)$/)                             { ${$rs_ignored}            = $2;
+        } elsif (!defined ${$rs_quiet}               and /^quiet/)                                            { ${$rs_quiet}              = 1;
+        } elsif (!defined ${$rs_force_lang_def}      and /^(?:force_lang_def|force-lang-def)(=|\s+)(.*?)$/)   { ${$rs_force_lang_def}     = $2;
+        } elsif (!defined ${$rs_read_lang_def}       and /^(?:read_lang_def|read-lang-def)(=|\s+)(.*?)$/)     { ${$rs_read_lang_def}      = $2;
+        } elsif (!defined ${$rs_progress_rate}       and /^(?:progress_rate|progress-rate)(=|\s+)(\d+)/)      { ${$rs_progress_rate}      = $2;
+        } elsif (!defined ${$rs_print_filter_stages} and /^(print_filter_stages|print-filter-stages)/)        { ${$rs_print_filter_stages}= 1;
+        } elsif (!defined ${$rs_report_file}         and /^(?:report_file|report-file)(=|\s+)(.*?)$/)         { ${$rs_report_file}        = $2;
+        } elsif (!defined ${$rs_report_file}         and /^out(=|\s+)(.*?)$/)                                 { ${$rs_report_file}        = $2;
+        } elsif (!defined ${$rs_sdir}                and /^sdir(=|\s+)(.*?)$/)                                { ${$rs_sdir}               = $2;
+        } elsif (!defined ${$rs_skip_uniqueness}     and /^(skip_uniqueness|skip-uniqueness)/)                { ${$rs_skip_uniqueness}    = 1;
+        } elsif (!defined ${$rs_strip_comments}      and /^(?:strip_comments|strip-comments)(=|\s+)(.*?)$/)   { ${$rs_strip_comments}     = $2;
+        } elsif (!defined ${$rs_original_dir}        and /^(original_dir|original-dir)/)                      { ${$rs_original_dir}       = 1;
+        } elsif (!defined ${$rs_sum_reports}         and /^(sum_reports|sum-reports)/)                        { ${$rs_sum_reports}        = 1;
+        } elsif (!defined ${$rs_hide_rate}           and /^(hid_rate|hide-rate)/)                             { ${$rs_hide_rate}          = 1;
+        } elsif (!defined ${$rs_processes}           and /^processes(=|\s+)(\d+)/)                            { ${$rs_processes}          = $2;
+        } elsif (!defined ${$rs_unicode}             and /^unicode/)                                          { ${$rs_unicode}            = 1;
+        } elsif (!defined ${$rs_3}                   and /^3/)                                                { ${$rs_3}                  = 1;
+        } elsif (!defined ${$rs_vcs}                 and /^vcs(=|\s+)(\S+)/)                                  { ${$rs_vcs}                = $2;
+        } elsif (!defined ${$rs_version}             and /^version/)                                          { ${$rs_version}            = 1;
+        } elsif (!defined ${$rs_write_lang_def}      and /^(?:write_lang_def|write-lang-def)(=|\s+)(.*?)$/)   { ${$rs_write_lang_def}     = $2;
+        } elsif (!defined ${$rs_write_lang_def_incl_dup} and /^(?:write_lang_def_incl_dup|write-lang-def-incl-dup)(=|\s+)(.*?)$/) { ${$rs_write_lang_def_incl_dup} = $2;
+        } elsif (!defined ${$rs_xml}                 and /^xml/)                                              { ${$rs_xml}                = 1;
+        } elsif (!defined ${$rs_xsl}                 and /^xsl(=|\s+)(.*?)$/)                                 { ${$rs_xsl}                = $2;
+        } elsif (!defined ${$rs_lang_no_ext}         and /^(?:lang_no_ext|lang-no-ext)(=|\s+)(.*?)$/)         { ${$rs_lang_no_ext}        = $2;
+        } elsif (!defined ${$rs_yaml}                and /^yaml/)                                             { ${$rs_yaml}               = 1;
+        } elsif (!defined ${$rs_csv}                 and /^csv/)                                              { ${$rs_csv}                = 1;
+        } elsif (!defined ${$rs_csv_delimiter}       and /^(?:csv_delimeter|csv-delimiter)(=|\s+)(.*?)$/)     { ${$rs_csv_delimiter}      = $2;
+        } elsif (!defined ${$rs_json}                and /^json/)                                             { ${$rs_json}               = 1;
+        } elsif (!defined ${$rs_md}                  and /^md/)                                               { ${$rs_md}                 = 1;
+        } elsif (!defined ${$rs_fullpath}            and /^fullpath/)                                         { ${$rs_fullpath}           = 1;
+        } elsif (!defined ${$rs_match_f}             and /^(?:match_f|match-f)(=|\s+)(.*?)$/)                 { ${$rs_match_f}            = $2;
+        } elsif (!defined ${$rs_not_match_f}         and /^(?:not_match_f|not-match-f)(=|\s+)(.*?)$/)         { ${$rs_not_match_f}        = $2;
+        } elsif (!defined ${$rs_match_d}             and /^(?:match_d|match-d)(=|\s+)(.*?)$/)                 { ${$rs_match_d}            = $2;
+        } elsif (!defined ${$rs_not_match_d}         and /^(?:not_match_d|not-match-d)(=|\s+)(.*?)$/)         { ${$rs_not_match_d}        = $2;
+        } elsif (!defined ${$rs_list_file}           and /^(?:list_file|list-file)(=|\s+)(.*?)$/)             { ${$rs_list_file}          = $2;
+        } elsif (!defined ${$rs_help}                and /^help/)                                             { ${$rs_help}               = 1;
+        } elsif (!defined ${$rs_skip_win_hidden}     and /^(skip_win_hidden|skip-win-hidden)/)                { ${$rs_skip_win_hidden}    = 1;
+        } elsif (!defined ${$rs_read_binary_files}   and /^(read_binary_files|read-binary-files)/)            { ${$rs_read_binary_files}  = 1;
+        } elsif (!defined ${$rs_sql}                 and /^sql(=|\s+)(.*?)$/)                                 { ${$rs_sql}                = $2;
+        } elsif (!defined ${$rs_sql_project}         and /^(?:sql_project|sql-project)(=|\s+)(.*?)$/)         { ${$rs_sql_project}        = $2;
+        } elsif (!defined ${$rs_sql_append}          and /^(sql_append|sql-append)/)                          { ${$rs_sql_append}         = 1;
+        } elsif (!defined ${$rs_sql_style}           and /^(?:sql_style|sql-style)(=|\s+)(.*?)$/)             { ${$rs_sql_style}          = $2;
+        } elsif (!defined ${$rs_inline}              and /^inline/)                                           { ${$rs_inline}             = 1;
+        } elsif (!defined ${$rs_exclude_ext}         and /^(?:exclude_ext|exclude-ext)(=|\s+)(.*?)$/)         { ${$rs_exclude_ext}        = $2;
+        } elsif (!defined ${$rs_ignore_whitespace}   and /^(ignore_whitespace|ignore-whitespace)/)            { ${$rs_ignore_whitespace}  = 1;
+        } elsif (!defined ${$rs_ignore_case_ext}     and /^(ignore_case_ext|ignore-case-ext)/)                { ${$rs_ignore_case_ext}    = 1;
+        } elsif (!defined ${$rs_ignore_case}         and /^(ignore_case|ignore-case)/)                        { ${$rs_ignore_case}        = 1;
+        } elsif (!defined ${$rs_follow_links}        and /^(follow_links|follow-links)/)                      { ${$rs_follow_links}       = 1;
+        } elsif (!defined ${$rs_autoconf}            and /^autoconf/)                                         { ${$rs_autoconf}           = 1;
+        } elsif (!defined ${$rs_sum_one}             and /^(sum_one|sum-one)/)                                { ${$rs_sum_one}            = 1;
+        } elsif (!defined ${$rs_by_percent}          and /^(?:by_percent|by-percent)(=|\s+)(.*?)$/)           { ${$rs_by_percent}         = $2;
+        } elsif (!defined ${$rs_stdin_name}          and /^(?:stdin_name|stdin-name)(=|\s+)(.*?)$/)           { ${$rs_stdin_name}         = $2;
+        } elsif (!defined ${$rs_force_on_windows}    and /^windows/)                                          { ${$rs_force_on_windows}   = 1;
+        } elsif (!defined ${$rs_force_on_unix}       and /^unix/)                                             { ${$rs_force_on_unix}      = 1;
+        } elsif (!defined ${$rs_show_os}             and /^(show_os|show-os)/)                                { ${$rs_show_os}            = 1;
+        } elsif (!defined ${$rs_skip_archive}        and /^(?:skip_archive|skip-archive)(=|\s+)(.*?)$/)       { ${$rs_skip_archive}       = $2;
+        } elsif (!defined ${$rs_max_file_size}       and /^(?:max_file_size|max-file-size)(=|\s+)(\d+)/)      { ${$rs_max_file_size}      = $2;
+        } elsif (!defined ${$rs_use_sloccount}       and /^(use_sloccount|use-sloccount)/)                    { ${$rs_use_sloccount}      = 1;
+        } elsif (!defined ${$rs_no_autogen}          and /^(no_autogen|no-autogen)/)                          { ${$rs_no_autogen}         = 1;
+        } elsif (!defined ${$rs_force_git}           and /^git/)                                              { ${$rs_force_git}          = 1;
+        } elsif (!defined ${$rs_exclude_list_file}   and /^(?:exclude_list_file|exclude-list-file)(=|\s+)(.*?)$/)
                                                                    { ${$rs_exclude_list_file}  = $2;
         } elsif (!defined ${$rs_v} and /(verbose|v)((=|\s+)(\d+))?/) {
             if (!defined $4) { ${$rs_v} =  0; }
             else             { ${$rs_v} = $4; }
-        } elsif (!defined $ra_script_lang and /script_lang|script-lang(=|\s+)(.*?)$/)         {
+        } elsif (!$has_script_lang and /^(?:script_lang|script-lang)(=|\s+)(.*?)$/)         {
                                                             push @{$ra_script_lang}          , $2;
-        } elsif (!defined $ra_force_lang  and /force_lang|force-lang(=|\s+)(.*?)$/)           {
+        } elsif (!$has_force_lang and /^(?:force_lang|force-lang)(=|\s+)(.*?)$/)           {
                                                             push @{$ra_force_lang}           , $2;
-        } elsif (!defined ${$rs_show_ext}          and /(show_ext|show-ext)((=|\s+)(.*))?$/)  {
+        } elsif (!defined ${$rs_show_ext}          and /^(show_ext|show-ext)((=|\s+)(.*))?$/)  {
             if (!defined $4) { ${$rs_show_ext} =  0; }
             else             { ${$rs_show_ext} = $4; }
-        } elsif (!defined ${$rs_show_lang}         and /(show_lang|show-lang)((=|\s+)(.*))?s/){
+        } elsif (!defined ${$rs_show_lang}         and /^(show_lang|show-lang)((=|\s+)(.*))?s/){
             if (!defined $4) { ${$rs_show_lang} =  0; }
             else             { ${$rs_show_lang} = $4; }
-        } elsif (!defined ${$rs_strip_str_comments}  and /(strip_str_comments|strip-str-comments)/)      { ${$rs_strip_str_comments} = 1;
-        } elsif (!defined ${$rs_file_encoding}       and /file_encoding|file-encoding(=|\s+)(\S+)/)      { ${$rs_file_encoding}      = $2;
-        } elsif (!defined ${$rs_docstring_as_code}   and /docstring_as_code|docstring-as-code/)          { ${$rs_docstring_as_code}  = 1;
+        } elsif (!defined ${$rs_strip_str_comments}  and /^(strip_str_comments|strip-str-comments)/)     { ${$rs_strip_str_comments} = 1;
+        } elsif (!defined ${$rs_file_encoding}       and /^(?:file_encoding|file-encoding)(=|\s+)(\S+)/) { ${$rs_file_encoding}      = $2;
+        } elsif (!defined ${$rs_docstring_as_code}   and /^(docstring_as_code|docstring-as-code)/)       { ${$rs_docstring_as_code}  = 1;
         } elsif (!defined ${$rs_stat}                and /stat/)                                         { ${$rs_stat}               = 1;
         }
 
