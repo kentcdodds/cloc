@@ -29,9 +29,9 @@
 # <http://www.gnu.org/licenses/gpl.txt>.
 #
 # 1}}}
-my $VERSION = "1.90";  # odd number == beta; even number == stable
+my $VERSION = "1.92";  # odd number == beta; even number == stable
 my $URL     = "github.com/AlDanial/cloc";  # 'https://' pushes header too wide
-require 5.006;
+require 5.10.0;
 # use modules                                  {{{1
 use warnings;
 use strict;
@@ -836,7 +836,7 @@ my $getopt_success = GetOptions(             # {{{1
    "unix"                                    => \$opt_force_on_unix       ,
    "show_os|show-os"                         => \$opt_show_os             ,
    "skip_archive|skip-archive=s"             => \$opt_skip_archive        ,
-   "max_file_size|max-file-size=i"           => \$opt_max_file_size       ,
+   "max_file_size|max-file-size=f"           => \$opt_max_file_size       ,
    "use_sloccount|use-sloccount"             => \$opt_use_sloccount       ,
    "no_autogen|no-autogen"                   => \$opt_no_autogen          ,
    "git"                                     => \$opt_force_git           ,
@@ -2311,6 +2311,13 @@ sub count_files {                            # {{{1
         }
         if ($Exclude_Language{$Language{$file}}) {
             $p_ignored{$file} = "--exclude-lang=$Language{$file}";
+            next;
+        }
+        if ($opt_force_lang_def and ($Language{$file} eq "XML") and
+            !defined $Filters_by_Language{XML}) {
+            # XML check is attempted for all unidentified text files.
+            # This can't be done if user forces language definition
+            # that excludes XML.  GH #596
             next;
         }
 
@@ -4502,6 +4509,8 @@ sub read_lang_def {                          # {{{1
     foreach (@lines) {
         next if /^\s*#/ or /^\s*$/;
 
+        $_ = lc $_ if $ON_WINDOWS and /^\s+(filename|extension)\s/;
+
         if (/^(\w+.*?)\s*$/) {
             $language = $1;
             next;
@@ -4589,6 +4598,8 @@ sub merge_lang_def {                         # {{{1
     my @lines = read_file($file);
     foreach (@lines) {
         next if /^\s*#/ or /^\s*$/;
+
+        $_ = lc $_ if $ON_WINDOWS and /^\s+(filename|extension)\s/;
 
         if (/^(\w+.*?)\s*$/) {
             $language = $1;
@@ -5367,6 +5378,9 @@ sub make_file_list {                         # {{{1
         } elsif (!defined $language) {
             $rh_ignored->{$F} = "unable to associate with a language";
             next;
+        } elsif ($language eq "(unknown)") {
+            # entry should already be in %{$rh_ignored}
+            next;
         }
         printf $fh "%d%s%s%s%s\n", $size_in_bytes, $separator,
                                    $language, $separator, $file;
@@ -5433,6 +5447,26 @@ sub invoke_generator {                       # {{{1
             push @post_filter, $F unless basename($F) =~ m{$opt_not_match_f};
             next;
         }
+        my $nBytes = -s $F ;
+        if (!$nBytes) {
+            $Ignored{$F} = 'zero sized file';
+            printf "files(%s)  zero size\n", $F if $opt_v > 5;
+        }
+        next unless $nBytes;
+        if ($nBytes > $opt_max_file_size*1024**2) {
+            $Ignored{$F} = "file size of " .
+                $nBytes/1024**2 . " MB exceeds max file size of " .
+                "$opt_max_file_size MB";
+            printf "file(%s)  exceeds $opt_max_file_size MB\n",
+                $F if $opt_v > 5;
+            next;
+        }
+        my $is_bin = -B $F ;
+        printf "files(%s)  size=%d  -B=%d\n",
+            $F, $nBytes, $is_bin if $opt_v > 5;
+        $is_bin = 0 if $opt_unicode and unicode_file($_);
+        $is_bin = 0 if $opt_read_binary_files;
+        next if $is_bin;
         push @post_filter, $F;
     }
     print "<- invoke_generator\n" if $opt_v > 2;
@@ -5451,12 +5485,13 @@ sub remove_duplicate_files {                 # {{{1
     # Where files are equally sized, compare their MD5 checksums.
     print "-> remove_duplicate_files\n" if $opt_v > 2;
 
+    my $separator = defined $opt_csv_delimiter ? $opt_csv_delimiter : ",";
     my $n = 0;
     my %files_by_size = (); # files_by_size{ # bytes } = [ list of files ]
     seek($fh, 0, 0); # rewind to beginning of the temp file
     while (<$fh>) {
         ++$n;
-        my ($size_in_bytes, $language, $file) = split(/,/, $_, 3);
+        my ($size_in_bytes, $language, $file) = split(/$separator/, $_, 3);
         if (!defined($size_in_bytes) or
             !defined($language)      or
             !defined($file)) {
@@ -5622,7 +5657,7 @@ sub files {                                  # {{{1
     if ($opt_match_d    ) { return unless $Dir =~ m{$opt_match_d}     }
 
     my $nBytes = -s $_ ;
-    if (!$nBytes) {
+    if (!$nBytes and -f $File::Find::name) {
         $Ignored{$File::Find::name} = 'zero sized file';
         printf "files(%s)  zero size\n", $File::Find::name if $opt_v > 5;
     }
@@ -5641,6 +5676,10 @@ sub files {                                  # {{{1
         $File::Find::name, $nBytes, $is_dir, $is_bin if $opt_v > 5;
     $is_bin = 0 if $opt_unicode and unicode_file($_);
     $is_bin = 0 if $opt_read_binary_files;
+    if ($is_bin and !$is_dir) {
+        $Ignored{$File::Find::name} = "binary file";
+        printf "files(%s)  binary file\n", $File::Find::name if $opt_v > 5;
+    }
     return if $is_dir or $is_bin;
     ++$nFiles_Found;
     printf "%8d files\r", $nFiles_Found
@@ -7569,8 +7608,7 @@ sub set_constants {                          # {{{1
             'auk'         => 'awk'                   ,
             'awk'         => 'awk'                   ,
             'bash'        => 'Bourne Again Shell'    ,
-            'bzl'         => 'Bazel'                 ,
-            'bazel'       => 'Bazel'                 ,
+            'bazel'       => 'Starlark'              ,
             'BUILD'       => 'Bazel'                 ,
             'dxl'         => 'DOORS Extension Language',
             'bat'         => 'DOS Batch'             ,
@@ -7915,6 +7953,7 @@ sub set_constants {                          # {{{1
             'mg'          => 'Modula3'               ,
             'mojom'       => 'Mojo'                  ,
             'meson.build' => 'Meson'                 ,
+            'metal'       => 'Metal'                 ,
             'mk'          => 'make'                  ,
 #           'mli'         => 'ML'                    , # ML not implemented
 #           'ml'          => 'ML'                    ,
@@ -8102,6 +8141,8 @@ sub set_constants {                          # {{{1
             'pl1'         => 'PL/I'                  ,
             'plm'         => 'PL/M'                  ,
             'lit'         => 'PL/M'                  ,
+            'puml'        => 'PlantUML'              ,
+            'properties'  => 'Properties'            ,
             'po'          => 'PO File'               ,
             'pbt'         => 'PowerBuilder'          ,
             'sra'         => 'PowerBuilder'          ,
@@ -8150,7 +8191,7 @@ sub set_constants {                          # {{{1
             'rc2'         => 'Windows Resource File' ,
             'sas'         => 'SAS'                   ,
             'sass'        => 'Sass'                  ,
-            'scss'        => 'Sass'                  ,
+            'scss'        => 'SCSS'                  ,
             'sh'          => 'Bourne Shell'          ,
             'smarty'      => 'Smarty'                ,
             'sml'         => 'Standard ML'           ,
@@ -8222,6 +8263,7 @@ sub set_constants {                          # {{{1
             'tsx'         => 'TypeScript'            ,
             'tss'         => 'Titanium Style Sheet'  ,
             'twig'        => 'Twig'                  ,
+            'um'          => 'Umka'                  ,
             'ui'          => 'Qt/Glade'              ,
             'glade'       => 'Glade'                 ,
             'vala'        => 'Vala'                  ,
@@ -8448,20 +8490,25 @@ sub set_constants {                          # {{{1
             'build.xml'         => 'Ant/XML'            ,
             'BUILD'             => 'Bazel'              ,
             'WORKSPACE'         => 'Bazel'              ,
+            'cmakelists.txt'    => 'CMake'              ,
             'CMakeLists.txt'    => 'CMake'              ,
             'Jamfile'           => 'Jam'                ,
+            'jamfile'           => 'Jam'                ,
             'Jamrules'          => 'Jam'                ,
             'Makefile'          => 'make'               ,
             'makefile'          => 'make'               ,
             'meson.build'       => 'Meson'              ,
-            'gnumakefile'       => 'make'               ,
             'Gnumakefile'       => 'make'               ,
+            'gnumakefile'       => 'make'               ,
             'pom.xml'           => 'Maven/XML'          ,
             'Rakefile'          => 'Ruby'               ,
             'rakefile'          => 'Ruby'               ,
             'Dockerfile'        => 'Dockerfile'         ,
             'Dockerfile.m4'     => 'Dockerfile'         ,
             'Dockerfile.cmake'  => 'Dockerfile'         ,
+            'dockerfile'        => 'Dockerfile'         ,
+            'dockerfile.m4'     => 'Dockerfile'         ,
+            'dockerfile.cmake'  => 'Dockerfile'         ,
             );
 # 1}}}
 %{$rh_Language_by_Prefix}     = (             # {{{1
@@ -8531,8 +8578,8 @@ sub set_constants {                          # {{{1
                             ],
     'Assembly'           => [
                                 [ 'remove_matches'      , '^\s*#'  ],
-                                [ 'call_regexp_common'  , 'C++'    ],
                                 [ 'remove_matches'      , '^\s*;'  ],
+                                [ 'call_regexp_common'  , 'C++'    ],
                                 [ 'remove_matches'      , '^\s*\@' ],
                                 [ 'remove_matches'      , '^\s*\|' ],
                                 [ 'remove_matches'      , '^\s*!'  ],
@@ -8783,7 +8830,10 @@ sub set_constants {                          # {{{1
                                 [ 'remove_matches'      , '^\s*#'  ],
                                 [ 'remove_inline'       , '#.*$'   ],
                             ],
-    'DOS Batch'          => [   [ 'remove_matches'      , '^\s*rem', ], ],
+    'DOS Batch'          => [   
+                                [ 'remove_matches'      , '^\s*rem' ],
+                                [ 'remove_matches'      , '^\s*::'  ],
+                            ],
     'DTD'                => [   [ 'remove_html_comments',          ],
                                 [ 'call_regexp_common'  , 'HTML'   ], ],
     'Elixir'             => [
@@ -8900,6 +8950,8 @@ sub set_constants {                          # {{{1
                             ],
     'GraphQL'            => [
                                 [ 'remove_matches'      , '^\s*#'  ],
+                                [ 'docstring_to_C'                 ],
+                                [ 'call_regexp_common'  , 'C'      ],
                                 [ 'remove_inline'       , '#.*$'   ],
                             ],
     'Groovy'             => [
@@ -9152,6 +9204,11 @@ sub set_constants {                          # {{{1
                                 [ 'remove_inline'       , '%.*$'   ],
                                 [ 'remove_matches'      , '^\s*%'  ],
                             ],
+    'Metal'              => [
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C++'    ],
+                            ],
     'Modula3'            => [   [ 'call_regexp_common'  , 'Pascal' ], ],
         # Modula 3 comments are (* ... *) so applying the Pascal filter
         # which also treats { ... } as a comment is not really correct.
@@ -9236,11 +9293,6 @@ sub set_constants {                          # {{{1
                                 [ 'call_regexp_common'  , 'C'       ],
                                 [ 'remove_inline'       , '#.*$'   ],
                             ],
-    'PureScript'         => [
-                                [ 'remove_matches'      , '^\s*--' ],
-                                [ 'remove_between_general', '{-', '-}' ],
-                                [ 'remove_inline'       , '--.*$'  ],
-                            ],
     'Patran Command Language'=> [
                                 [ 'remove_matches'      , '^\s*#'   ],
                                 [ 'remove_matches'      , '^\s*\$#' ],
@@ -9251,6 +9303,10 @@ sub set_constants {                          # {{{1
                             ],
     'PL/M'               => [
                                 [ 'call_regexp_common'  , 'C'      ],
+                            ],
+    'PlantUML'           => [
+                                [ 'remove_between_general', "/'", "'/" ],
+                                [ 'remove_matches'      , "^\\s*'" ],
                             ],
     'Perl'               => [   [ 'remove_below'        , '^__(END|DATA)__'],
                                 [ 'remove_matches'      , '^\s*#'  ],
@@ -9286,6 +9342,10 @@ sub set_constants {                          # {{{1
                                 [ 'call_regexp_common'  , 'C'      ],
                                 [ 'remove_inline'       , '(//|\%).*$' ],
                             ],
+    'Properties'         => [
+                                [ 'remove_matches'      , '^\s*#'  ],
+                                [ 'remove_matches'      , '^\s*!'  ],
+                            ],
     'Protocol Buffers'   => [
                                 [ 'rm_comments_in_strings', '"', '/*', '*/' ],
                                 [ 'rm_comments_in_strings', '"', '//', '' ],
@@ -9295,6 +9355,11 @@ sub set_constants {                          # {{{1
                                 [ 'remove_pug_block'    ,          ],
                                 [ 'remove_matches'      , '^\s*//' ],
                                 [ 'remove_inline'       , '//.*$'  ],
+                            ],
+    'PureScript'         => [
+                                [ 'remove_matches'      , '^\s*--' ],
+                                [ 'remove_between_general', '{-', '-}' ],
+                                [ 'remove_inline'       , '--.*$'  ],
                             ],
     'Python'             => [
                                 [ 'remove_matches'      , '/\*'    ],
@@ -9419,8 +9484,9 @@ sub set_constants {                          # {{{1
                                 [ 'remove_between_general', '*', ';' ],
                             ],
     'Sass'               => [
-                                [ 'remove_matches'      , '^\s*//' ],
-                                [ 'remove_inline'       , '//.*$'  ],
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C++'    ],
                             ],
     'Scala'              => [
                                 [ 'rm_comments_in_strings', '"', '/*', '*/' ],
@@ -9431,6 +9497,11 @@ sub set_constants {                          # {{{1
     'Scheme'             => [
                                 [ 'remove_matches'      , '^\s*;'  ],
                                 [ 'remove_inline'       , ';.*$'   ],
+                            ],
+    'SCSS'               => [
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C++'    ],
                             ],
     'sed'                => [
                                 [ 'remove_matches'      , '^\s*#'  ],
@@ -9609,6 +9680,11 @@ sub set_constants {                          # {{{1
                                 [ 'remove_between_general', '{#', '#}' ],
                             ],
     'TypeScript'         => [
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C++'    ],
+                            ],
+    'Umka'               => [
                                 [ 'rm_comments_in_strings', '"', '/*', '*/' ],
                                 [ 'rm_comments_in_strings', '"', '//', '' ],
                                 [ 'call_regexp_common'  , 'C++'    ],
@@ -9862,6 +9938,7 @@ sub set_constants {                          # {{{1
     'make'               =>     '\\\\$'         ,
     'MATLAB'             =>     '\.\.\.\s*$'    ,
     'Meson'              =>     '\\\\$'         ,
+    'Metal'              =>     '\\\\$'         ,
     'MXML'               =>     '\\\\$'         ,
     'Objective-C'        =>     '\\\\$'         ,
     'Objective-C++'      =>     '\\\\$'         ,
@@ -10353,6 +10430,7 @@ sub set_constants {                          # {{{1
     'mentor'                       =>   1.51,
     'mesa'                         =>   0.75,
     'Meson'                        =>   1.00,
+    'Metal'                        =>   1.51,
     'microfocus cobol'             =>   1.00,
     'microforth'                   =>   1.25,
     'microsoft c'                  =>   0.63,
@@ -10410,33 +10488,19 @@ sub set_constants {                          # {{{1
     'paradox/pal'                  =>   2.22,
     'Pascal'                       =>   0.88,
     'Patran Command Language'      =>   2.50,
-    'pc focus'                     =>   2.22,
-    'pdl millenium'                =>   3.81,
-    'pdp11 ade'                    =>   1.51,
-    'peoplesoft'                   =>   2.50,
     'Perl'                         =>   4.00,
-    'persistance object builder'   =>   3.81,
     'Pig Latin'                    =>   1.00,
-    'pilot'                        =>   1.51,
     'PL/I'                         =>   1.38,
     'pl/1'                         =>   1.38,
     'PL/M'                         =>   1.13,
+    'PlantUML'                     =>   2.00,
     'pl/s'                         =>   0.88,
     'Oracle PL/SQL'                =>   2.58,
     'pl/sql'                       =>   2.58,
-    'planit'                       =>   1.51,
-    'planner'                      =>   1.25,
-    'planperfect 1'                =>  11.43,
-    'plato'                        =>   1.51,
     'PO File'                      =>   1.50,
-    'polyforth'                    =>   1.25,
-    'pop'                          =>   1.38,
-    'poplog'                       =>   1.38,
     'power basic'                  =>   1.63,
     'PowerBuilder'                 =>   3.33,
-    'powerhouse'                   =>   5.71,
     'PowerShell'                   =>   3.00,
-    'ppl (plus)'                   =>   2.00,
     'problemoriented default'      =>   1.13,
     'proc'                         =>   2.96,
     'procedural default'           =>   0.75,
@@ -10446,6 +10510,7 @@ sub set_constants {                          # {{{1
     'ProGuard'                     =>   2.50,
     'proiv'                        =>   1.38,
     'Prolog'                       =>   1.25,
+    'Properties'                   =>   1.36,
     'prose'                        =>   0.75,
     'proteus'                      =>   0.75,
     'Protocol Buffers'             =>   2.00,
@@ -10517,6 +10582,7 @@ sub set_constants {                          # {{{1
     'SaltStack'                    =>   2.00,
     'SAS'                          =>   1.5 ,
     'Sass'                         =>   1.5 ,
+    'SCSS'                         =>   1.5 ,
     'simplan'                      =>   2.22,
     'simscript'                    =>   1.74,
     'simula'                       =>   1.74,
@@ -10538,7 +10604,6 @@ sub set_constants {                          # {{{1
     'solo'                         =>   1.38,
     'SparForte'                    =>   3.80,
     'speakeasy'                    =>   2.22,
-    'spinnaker ppl'                =>   2.22,
     'splus'                        =>   2.50,
     'spreadsheet default'          =>  13.33,
     'sps'                          =>   0.25,
@@ -10553,7 +10618,6 @@ sub set_constants {                          # {{{1
     'strategem'                    =>   2.22,
     'stress'                       =>   1.13,
     'strongly typed default'       =>   0.88,
-    'style'                        =>   1.74,
     'Stylus'                       =>   1.48,
     'SugarSS'                      =>   2.50,
     'superbase 1.3'                =>   2.22,
@@ -10597,22 +10661,13 @@ sub set_constants {                          # {{{1
     'TypeScript'                   =>   2.00,
     'ucsd pascal'                  =>   0.88,
     'ufo/ims'                      =>   2.22,
-    'uhelp'                        =>   2.50,
-    'uniface'                      =>   5.00,
+    'Umka'                         =>   2.00,
     'Unity-Prefab'                 =>   2.50,
     'Vala'                         =>   1.50,
     'Vala Header'                  =>   1.40,
-    'vax acms'                     =>   1.38,
-    'vax ade'                      =>   2.00,
-    'vbscript'                     =>   2.35,
-    'vectran'                      =>   0.75,
     'Verilog-SystemVerilog'        =>   1.51,
     'VHDL'                         =>   4.21,
     'vim script'                   =>   3.00,
-    'visible c'                    =>   1.63,
-    'visible cobol'                =>   2.00,
-    'visicalc 1'                   =>   8.89,
-    'visual 4.0'                   =>   2.76,
     'visual basic'                 =>   1.90,
     'Visual Basic'                 =>   2.76,
     'VB for Applications'          =>   2.76,
@@ -10627,21 +10682,11 @@ sub set_constants {                          # {{{1
     'Visualforce Page'             =>   1.9 ,
     'visualgen'                    =>   4.44,
     'VM'                           =>   2.00,
-    'vpf'                          =>   0.84,
     'Vuejs Component'              =>   2.00,
     'vulcan'                       =>   1.25,
-    'vz programmer'                =>   2.22,
-    'warp x'                       =>   2.00,
-    'watcom c'                     =>   0.63,
-    'watcom c/386'                 =>   0.63,
-    'waterloo c'                   =>   0.63,
-    'waterloo pascal'              =>   0.88,
-    'watfiv'                       =>   0.94,
-    'watfor'                       =>   0.88,
     'web scripts'                  =>   5.33,
     'Web Services Description'     =>   1.00,
     'WebAssembly'                  =>   0.45,
-    'whip'                         =>   0.88,
     'Windows Message File'         =>   1.00,
     'Windows Resource File'        =>   1.00,
     'Windows Module Definition'    =>   1.00,
@@ -11227,6 +11272,8 @@ sub pascal_or_puppet {                       # {{{1
         ++$pascal_points if /writeln/;
 
         ++$puppet_points if /^\s*class\s+/ and not /class\s+operator\s+/;
+        ++$puppet_points if /^\s*function\s+[a-z][a-z0-9]+::[a-z][a-z0-9]+\s*/;
+        ++$puppet_points if /^\s*type\s+[A-Z]\w+::[A-Z]\w+\s+/;
         ++$puppet_points if /^\s*case\s+/;
         ++$puppet_points if /^\s*package\s+/;
         ++$puppet_points if /^\s*file\s+/;
@@ -12418,6 +12465,7 @@ sub unicode_to_ascii {                       # {{{1
         if (ord($L) == 9 or ord($L) == 10 or ord($L) == 13) {
             my $companion;
             if ($points_1) {
+                last if $i+1 >= $length;
                 $companion = $unicode[$i+1];
             } else {
                 $companion = $unicode[$i-1];
