@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 # cloc -- Count Lines of Code                  {{{1
-# Copyright (C) 2006-2021 Al Danial <al.danial@gmail.com>
+# Copyright (C) 2006-2022 Al Danial <al.danial@gmail.com>
 # First release August 2006
 #
 # Includes code from:
@@ -29,7 +29,7 @@
 # <http://www.gnu.org/licenses/gpl.txt>.
 #
 # 1}}}
-my $VERSION = "1.92";  # odd number == beta; even number == stable
+my $VERSION = "1.94";  # odd number == beta; even number == stable
 my $URL     = "github.com/AlDanial/cloc";  # 'https://' pushes header too wide
 require 5.10.0;
 # use modules                                  {{{1
@@ -362,6 +362,8 @@ Usage: $script [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <repo
                              such as GNU autoconf.  To see a list of these files
                              (then exit), run with --no-autogen list
                              See also --autoconf.
+   --no-recurse              Count files in the given directories without
+                             recursively descending below them.
    --original-dir            [Only effective in combination with
                              --strip-comments]  Write the stripped files
                              to the same directory as the original files.
@@ -502,9 +504,9 @@ Usage: $script [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <repo
                              separated file extensions.  Use --show-ext to
                              see the recognized extensions.
    --include-lang=<L1>[,L2[...]]
-                             Count only the given comma separated languages
-                             L1, L2, L3, et cetera.  Use --show-lang to see
-                             the list of recognized languages.
+                             Count only the given comma separated, case-
+                             insensitive languages L1, L2, L3, et cetera.  Use
+                             --show-lang to see the list of recognized languages.
    --match-d=<regex>         Only count files in directories matching the Perl
                              regex.  For example
                                --match-d='/(src|include)/'
@@ -751,6 +753,7 @@ my (
     $opt_stat                 ,
     $opt_summary_cutoff       ,
     $opt_skip_leading         ,
+    $opt_no_recurse           ,
    );
 
 my $getopt_success = GetOptions(             # {{{1
@@ -850,6 +853,7 @@ my $getopt_success = GetOptions(             # {{{1
    "stat"                                    => \$opt_stat                ,
    "summary_cutoff|summary-cutoff=s"         => \$opt_summary_cutoff      ,
    "skip_leading|skip-leading:s"             => \$opt_skip_leading        ,
+   "no_recurse|no-recurse"                   => \$opt_no_recurse          ,
   );
 # 1}}}
 $config_file = $opt_config_file if defined $opt_config_file;
@@ -961,8 +965,8 @@ die unless exclude_dir_validates(\%Exclude_Dir);
 my %Include_Ext = ();
    %Include_Ext = map { $_ => 1 } split(/,/, $opt_include_ext)
         if $opt_include_ext;
-my %Include_Language = ();
-   %Include_Language = map { $_ => 1 } split(/,/, $opt_include_lang)
+my %Include_Language = (); # keys are lower case language names
+   %Include_Language = map { lc($_) => 1 } split(/,/, $opt_include_lang)
         if $opt_include_lang;
 # Forcibly exclude .svn, .cvs, .hg, .git, .bzr directories.  The contents of these
 # directories often conflict with files of interest.
@@ -1150,6 +1154,10 @@ if (!$opt_diff_list_file) {
 trick_pp_packer_encode() if $ON_WINDOWS and $opt_file_encoding;
 $File::Find::dont_use_nlink = 1 if $opt_stat or top_level_SMB_dir(\@ARGV);
 my @git_similarity = (); # only populated with --git-diff-simindex
+my %git_metadata   = ();
+get_git_metadata(\@ARGV, \%git_metadata) if $opt_force_git;
+#use Data::Dumper;
+#print Dumper(\%git_metadata);
 replace_git_hash_with_tarfile(\@ARGV, \@git_similarity);
 # 1}}}
 # Step 1:  Initialize global constants.        {{{1
@@ -1732,7 +1740,7 @@ foreach my $FH (@fh) {  # loop over each pair of file sets
         foreach my $file (keys %{$unique_source_file{$FH}}) {
             my $keep_file = 0;
             foreach my $keep_lang (keys %Include_Language) {
-                if ($Language{$FH}{$file} eq $keep_lang) {
+                if (lc($Language{$FH}{$file}) eq $keep_lang) {
                     $keep_file = 1;
                     last;
                 }
@@ -2089,7 +2097,10 @@ if      ($opt_by_file_by_lang) {
 # 1}}}
 }
 if ($opt_report_file) { write_file($opt_report_file, {}, @Lines_Out); }
-else                  { print "\n", join("\n", @Lines_Out), "\n"; }
+else {
+    print "\n" unless $opt_quiet;
+    print join("\n", @Lines_Out), "\n";
+}
 if ($opt_count_diff) {
     ++$opt_count_diff;
     exit if $opt_count_diff > 3;
@@ -2305,7 +2316,7 @@ sub count_files {                            # {{{1
             $p_ignored{$file} = "not in --include-ext=$opt_include_ext";
             next;
         }
-        if ($opt_include_lang and not $Include_Language{$Language{$file}}) {
+        if ($opt_include_lang and not $Include_Language{lc($Language{$file})}) {
             $p_ignored{$file} = "not in --include-lang=$opt_include_lang";
             next;
         }
@@ -2449,7 +2460,7 @@ sub count_filesets {                         # {{{1
         next if $opt_include_ext
             and not $Include_Ext{ file_extension($f) };
         next if $opt_include_lang
-            and not $Include_Language{$Language{$fset_b}{$f}};
+            and not $Include_Language{lc($Language{$fset_b}{$f})};
         my $this_lang = $Language{$fset_b}{$f};
         if (!defined  $Language{$fset_b}{$f}) {
             # shouldn't happen but could get here if using
@@ -2494,7 +2505,7 @@ sub count_filesets {                         # {{{1
             and not $Include_Ext{ file_extension($f) };
         next if $opt_include_lang
             and (not defined $Language{$fset_a}{$f}
-             or  not defined $Include_Language{$Language{$fset_a}{$f}});
+             or  not defined $Include_Language{lc($Language{$fset_a}{$f})});
         my $this_lang = $Language{$fset_a}{$f};
         if ($this_lang eq "(unknown)") {
             $p_ignored{$f} = "unknown language";
@@ -2549,13 +2560,13 @@ sub count_filesets {                         # {{{1
         # filter out non-included extensions
         if ($opt_include_ext  and not $Include_Ext{ file_extension($file_L) }
                               and not $Include_Ext{ file_extension($file_R) }) {
-            $p_ignored{$file_L} = "not in --include-lang=$opt_include_ext";
-            $p_ignored{$file_R} = "not in --include-lang=$opt_include_ext";
+            $p_ignored{$file_L} = "not in --include-ext=$opt_include_ext";
+            $p_ignored{$file_R} = "not in --include-ext=$opt_include_ext";
             next;
         }
         # filter out non-included languages
-        if ($opt_include_lang and not $Include_Language{$Lang_L}
-                              and not $Include_Language{$Lang_R}) {
+        if ($opt_include_lang and not $Include_Language{lc($Lang_L)}
+                              and not $Include_Language{lc($Lang_R)}) {
             $p_ignored{$file_L} = "not in --include-lang=$opt_include_lang";
             $p_ignored{$file_R} = "not in --include-lang=$opt_include_lang";
             next;
@@ -3324,6 +3335,16 @@ sub xml_yaml_or_json_header {                # {{{1
         $header .= "\n$report_file"
             if $opt_report_file;
         $header .= "\n</header>";
+        if (%git_metadata) {
+            foreach my $target (keys %git_metadata) {
+                $header .= "\n<source>";
+                $header .= "\n  <target>$target</target>";
+                $header .= "\n  <origin>$git_metadata{$target}{'origin'}</origin>";
+                $header .= "\n  <branch>$git_metadata{$target}{'branch'}</branch>";
+                $header .= "\n  <commit>$git_metadata{$target}{'commit'}</commit>";
+                $header .= "\n</source>";
+            }
+        }
     } elsif ($opt_yaml or $opt_json) {
         my ($Q, $open_B, $close_B, $start, $C) = yaml_to_json_separators();
         $header = "${start}${Q}header${Q} : $open_B
@@ -4035,6 +4056,7 @@ sub generate_report {                        # {{{1
             }
         }
     } else {
+        $header_line =~ s/,// if $opt_csv;
         push @results, output_header($header_line, $hyphen_line, $BY_FILE);
     }
 
@@ -4861,6 +4883,27 @@ sub top_level_SMB_dir {                      # {{{1
     return 0;
 }
 # 1}}}
+sub get_git_metadata {                       # {{{1
+    my ($ra_arg_list,             # in  file name, directory name and/or
+                                  #     git commit hash to examine
+        $rh_git_metadata) = @_;   # out repo info
+    # Capture git information where possible--origin, branch, commit hash.
+    my $prt_args = join(",", @{$ra_arg_list});
+    print "-> get_git_metadata($prt_args)\n" if $opt_v > 2;
+    foreach my $arg (@{$ra_arg_list}) {
+        next if -f $arg;
+        my $origin = `git remote get-url origin 2>&1`;
+        next if $origin =~ /^fatal:/;
+        chomp($rh_git_metadata->{$arg}{"origin"} = $origin);
+        chomp($rh_git_metadata->{$arg}{"branch"} = `git symbolic-ref --short HEAD`);
+        if (-d $arg) {
+            chomp($rh_git_metadata->{$arg}{"commit"}   = `git rev-parse HEAD`);
+        } else {
+            chomp($rh_git_metadata->{$arg}{"commit"}   = `git rev-parse $arg`);
+        }
+    }
+    print "<- get_git_metadata()\n" if $opt_v > 2;
+} # 1}}}
 sub replace_git_hash_with_tarfile {          # {{{1
     my ($ra_arg_list,             # in  file name, directory name and/or
                                   #     git commit hash to examine
@@ -5320,9 +5363,15 @@ sub make_file_list {                         # {{{1
             $Ignored{$D} = "--exclude-dir=$Exclude_Dir{$dir}";
             next;
         }
-        find({wanted     => \&files            ,
-              preprocess => \&find_preprocessor,
-              follow     =>  $opt_follow_links }, $dir);
+        if ($opt_no_recurse) {
+            opendir(DIR, $dir);
+            push @file_list, grep(-f $_, readdir(DIR));
+            closedir(DIR);
+        } else {
+            find({wanted     => \&files            ,
+                  preprocess => \&find_preprocessor,
+                  follow     =>  $opt_follow_links }, $dir);
+        }
     }
     if ($opt_follow_links) {
         # giving { 'follow' => 1 } to find() makes it skip the
@@ -5996,8 +6045,12 @@ sub first_line {                             # {{{1
         print "<- first_line($file, $n_lines)\n" if $opt_v > 2;
         return $line;
     }
+    # issue 644: Unicode files can have non-zero $n_lines
+    # but empty <$IN> contents
     for (my $i = 0; $i < $n_lines; $i++) {
-        chomp($line .= <$IN>);
+        my $L = <$IN>;
+        last unless defined $L;
+        chomp($line .= $L);
     }
     $IN->close;
     print "<- first_line($file, $n_lines, '$line')\n" if $opt_v > 2;
@@ -6150,9 +6203,9 @@ sub call_counter {                           # {{{1
 
     print_lines($file, "Original file:", \@lines) if $opt_print_filter_stages;
     @lines = rm_blanks(\@lines, $language, \%EOL_Continuation_re); # remove blank lines
-    print "   call_counter: total_lines=$total_lines  blank_lines=",
-        scalar(@lines), "\n" if $opt_v > 2;
     my $blank_lines = $total_lines - scalar @lines;
+    print "   call_counter: total_lines=$total_lines  blank_lines=",
+        $blank_lines, "\n" if $opt_v > 2;
     print_lines($file, "Blank lines removed:", \@lines)
         if $opt_print_filter_stages;
 
@@ -6465,16 +6518,29 @@ sub rm_blanks {                              # {{{1
     } else {
         # removes blank lines
         if (defined $rh_EOL_continuation_re->{$language}) {
-            @out = remove_matches_2re($ra_in, '^\s*$',
+            @out = remove_matches_2re($ra_in, blank_regex($language),
                                       $rh_EOL_continuation_re->{$language});
         } else {
-            @out = remove_matches($ra_in, '^\s*$');
+            @out = remove_matches($ra_in, blank_regex($language));
         }
     }
 
     print "<- rm_blanks(language=$language, n_remain= ",
         scalar(@out), "\n" if $opt_v > 2;
     return @out;
+} # 1}}}
+sub blank_regex {                            # {{{1
+    my ($language) = @_;
+
+    print "-> blank_regex(language=$language)\n" if $opt_v > 2;
+    
+    my $blank_regex = '^\s*$';
+    if ($language eq "X++") {
+        $blank_regex = '^\s*#?\s*$';
+    }
+
+    print "<- blank_regex(language=$language) = \"", $blank_regex, "\"\n" if $opt_v > 2;
+    return $blank_regex;
 } # 1}}}
 sub rm_comments {                            # {{{1
     my ($ra_lines , # in, must be free of blank lines
@@ -7688,6 +7754,8 @@ sub set_constants {                          # {{{1
 # bash or sh scripts
             'da'          => 'DAL'                   ,
             'dart'        => 'Dart'                  ,
+            'dsc'         => 'DenizenScript'         ,
+            'derw'        => 'Derw'                  ,
             'def'         => 'Windows Module Definition',
             'dhall'       => 'dhall'                 ,
             'dt'          => 'DIET'                  ,
@@ -7733,6 +7801,8 @@ sub set_constants {                          # {{{1
             'exp'         => 'Expect'                ,
             '4th'         => 'Forth'                 ,
             'fish'        => 'Fish Shell'            ,
+            'fsl'         => 'Finite State Language' ,
+            'jssm'        => 'Finite State Language' ,
             'fnl'         => 'Fennel'                ,
             'forth'       => 'Forth'                 ,
             'fr'          => 'Forth'                 ,
@@ -7762,10 +7832,12 @@ sub set_constants {                          # {{{1
             'fs'          => 'F#/Forth'              ,
             'fsi'         => 'F#'                    ,
             'fsx'         => 'F# Script'             ,
+            'fut'         => 'Futhark'               ,
             'fxml'        => 'FXML'                  ,
             'gnumakefile' => 'make'                  ,
             'Gnumakefile' => 'make'                  ,
             'gd'          => 'GDScript'              ,
+            'gdshader'    => 'Godot Shaders'         ,
             'vshader'     => 'GLSL'                  ,
             'vsh'         => 'GLSL'                  ,
             'vrx'         => 'GLSL'                  ,
@@ -7776,6 +7848,7 @@ sub set_constants {                          # {{{1
             'fsh'         => 'GLSL'                  ,
             'frg'         => 'GLSL'                  ,
             'fp'          => 'GLSL'                  ,
+            'fbs'         => 'Flatbuffers'           ,
             'glsl'        => 'GLSL'                  ,
             'graphqls'    => 'GraphQL'               ,
             'gql'         => 'GraphQL'               ,
@@ -7830,6 +7903,7 @@ sub set_constants {                          # {{{1
             'html.hl'     => 'HTML'                  ,
             'htm'         => 'HTML'                  ,
             'html'        => 'HTML'                  ,
+            'heex'        => 'HTML EEx'              ,
             'i3'          => 'Modula3'               ,
             'ice'         => 'Slice'                 ,
             'icl'         => 'Clean'                 ,
@@ -7865,6 +7939,7 @@ sub set_constants {                          # {{{1
             'pac'         => 'JavaScript'            ,
             'njs'         => 'JavaScript'            ,
             'mjs'         => 'JavaScript'            ,
+            'cjs'         => 'JavaScript'            ,
             'jss'         => 'JavaScript'            ,
             'jsm'         => 'JavaScript'            ,
             'jsfl'        => 'JavaScript'            ,
@@ -7917,6 +7992,7 @@ sub set_constants {                          # {{{1
             'lhs'         => 'Haskell'               ,
             'lex'         => 'lex'                   ,
             'l'           => 'lex'                   ,
+            'lem'         => 'Lem'                   ,
             'less'        => 'LESS'                  ,
             'lfe'         => 'LFE'                   ,
             'liquid'      => 'liquid'                ,
@@ -7981,6 +8057,7 @@ sub set_constants {                          # {{{1
             'wixproj'     => 'MSBuild script'        ,
             'btproj'      => 'MSBuild script'        ,
             'msbuild'     => 'MSBuild script'        ,
+            'ixx'         => 'Visual Studio Module'  ,
             'sln'         => 'Visual Studio Solution',
             'mps'         => 'MUMPS'                 ,
             'mth'         => 'Teamcenter mth'        ,
@@ -8134,10 +8211,15 @@ sub set_constants {                          # {{{1
             'sbl'         => 'Softbridge Basic'      ,
             'SBL'         => 'Softbridge Basic'      ,
             'sed'         => 'sed'                   ,
-            'ses'         => 'Patran Command Language'   ,
             'sp'          => 'SparForte'             ,
             'sol'         => 'Solidity'              ,
+            'ses'         => 'Patran Command Language'   ,
             'pcl'         => 'Patran Command Language'   ,
+            'peg'         => 'PEG'                   ,
+            'pegjs'       => 'peg.js'                ,
+            'peggy'       => 'peggy'                 ,
+            'tspeg'       => 'tspeg'                 ,
+            'jspeg'       => 'tspeg'                 ,
             'pl1'         => 'PL/I'                  ,
             'plm'         => 'PL/M'                  ,
             'lit'         => 'PL/M'                  ,
@@ -8216,6 +8298,7 @@ sub set_constants {                          # {{{1
             'svg'         => 'SVG'                   ,
             'SVG'         => 'SVG'                   ,
             'v'           => 'Verilog-SystemVerilog/Coq' ,
+            'td'          => 'TableGen'              ,
             'tcl'         => 'Tcl/Tk'                ,
             'tcsh'        => 'C Shell'               ,
             'tk'          => 'Tcl/Tk'                ,
@@ -8235,6 +8318,8 @@ sub set_constants {                          # {{{1
 #           'cls'         => 'TeX'                   ,
             'dtx'         => 'TeX'                   ,
             'bst'         => 'TeX'                   ,
+            'txt'         => 'Text'                  ,
+            'text'        => 'Text'                  ,
             'tres'        => 'Godot Resource'        ,
             'tscn'        => 'Godot Scene'           ,
             'thrift'      => 'Thrift'                ,
@@ -8301,6 +8386,7 @@ sub set_constants {                          # {{{1
             'wsdl'        => 'Web Services Description',
             'x'           => 'Logos'                 ,
             'xm'          => 'Logos'                 ,
+            'xpo'         => 'X++'                   , # Microsoft Dynamics AX 4.0 export format
             'xmi'         => 'XMI'                   ,
             'XMI'         => 'XMI'                   ,
             'zcml'        => 'XML'                   ,
@@ -8759,6 +8845,15 @@ sub set_constants {                          # {{{1
                                 [ 'rm_comments_in_strings', '"', '//', '' ],
                                 [ 'call_regexp_common'  , 'C++'    ],
                             ],
+    'DenizenScript'      => [ # same as YAML
+                                [ 'remove_matches'      , '^\s*#'  ],
+                                [ 'remove_inline'       , '#.*$'   ],
+                            ],
+    'Derw'               => [
+                                [ 'remove_matches'      , '^\s*--' ],
+                                [ 'remove_between_general', '{-', '-}' ],
+                                [ 'remove_inline'       , '--.*$'  ],
+                            ],
     'dhall'              => [   [ 'remove_haskell_comments', '>filename<' ], ],
     'Delphi Form'        => [ # same as Pascal
                                 [ 'remove_between_regex', '\{[^$]', '}' ],
@@ -8854,6 +8949,11 @@ sub set_constants {                          # {{{1
                                 [ 'remove_matches'      , '^\s*;'  ],
                                 [ 'remove_inline'       , ';.*$'   ],
                             ],
+    'Finite State Language' => [
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C++'    ],
+                            ],
     'Fish Shell'         => [
                                 [ 'remove_matches'      , '^\s*#'  ],
                                 [ 'remove_inline'       , '#.*$'   ],
@@ -8886,6 +8986,9 @@ sub set_constants {                          # {{{1
     'Freemarker Template' => [
                                 [ 'remove_between_general', '<#--', '-->' ],
                             ],
+    'Futhark'            => [
+                                [ 'remove_matches'      , '^\s*--'  ],
+                            ],
     'FXML'               => [
                                 [ 'remove_html_comments',          ],
                                 [ 'call_regexp_common'  , 'HTML'   ],
@@ -8898,11 +9001,21 @@ sub set_constants {                          # {{{1
                                 [ 'call_regexp_common'  , 'Pascal' ],
                                 [ 'remove_matches'      , '^\s*//' ],
                             ],
+    'Flatbuffers'        => [
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C++'    ],
+                                [ 'remove_inline'       , '//.*$'  ],
+                            ],
     'Godot Scene'        => [
                                 [ 'remove_matches'      , '^\s*;'  ],
                             ],
     'Godot Resource'     => [
                                 [ 'remove_matches'      , '^\s*;'  ],
+                            ],
+    'Godot Shaders'      => [
+                                [ 'remove_matches'      , '^\s*//' ],
+                                [ 'remove_inline'       , '//.*$'  ],
                             ],
     'GDScript'           => [
                                 [ 'remove_matches'      , '^\s*#'  ],
@@ -9009,6 +9122,10 @@ sub set_constants {                          # {{{1
     'HTML'               => [
                                 [ 'remove_html_comments',          ],
                                 [ 'call_regexp_common'  , 'HTML'   ],
+                            ],
+    'HTML EEx'           => [
+                                [ 'remove_matches'       , '^\s*<% #' ],
+                                [ 'remove_between_general', '<%!--', '--%>' ],
                             ],
     'Hoon'               => [
                                 [ 'remove_matches'      , '^\s*:[:><]' ],
@@ -9130,6 +9247,9 @@ sub set_constants {                          # {{{1
                                 [ 'remove_between_general', '/-', '-/' ],
                                 [ 'remove_matches'      , '^\s*--' ],
                                 [ 'remove_inline'       , '--.*$'  ],
+                            ],
+    'Lem'                => [
+                                [ 'remove_OCaml_comments',         ],
                             ],
     'LESS'               => [
 #                               [ 'remove_matches'      , '^\s*//' ],
@@ -9298,6 +9418,32 @@ sub set_constants {                          # {{{1
                                 [ 'remove_matches'      , '^\s*\$#' ],
                                 [ 'call_regexp_common'  , 'C'       ],
                             ],
+    'Perl'               => [   [ 'remove_below'        , '^__(END|DATA)__'],
+                                [ 'remove_matches'      , '^\s*#'  ],
+                                [ 'remove_below_above'  , '^=head1', '^=cut'  ],
+                                [ 'remove_inline'       , '#.*$'   ],
+                            ],
+    'PEG'                => [
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C++'    ],
+                            ],
+    'peg.js'             => [
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C++'    ],
+                            ],
+    'peggy'              => [
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C++'    ],
+                            ],
+    'tspeg'              => [
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C++'    ],
+                            ],
+    'Perl/Prolog'        => [ [ 'die' ,          ], ], # never called
     'PL/I'               => [
                                 [ 'call_regexp_common'  , 'C'      ],
                             ],
@@ -9308,12 +9454,6 @@ sub set_constants {                          # {{{1
                                 [ 'remove_between_general', "/'", "'/" ],
                                 [ 'remove_matches'      , "^\\s*'" ],
                             ],
-    'Perl'               => [   [ 'remove_below'        , '^__(END|DATA)__'],
-                                [ 'remove_matches'      , '^\s*#'  ],
-                                [ 'remove_below_above'  , '^=head1', '^=cut'  ],
-                                [ 'remove_inline'       , '#.*$'   ],
-                            ],
-    'Perl/Prolog'        => [ [ 'die' ,          ], ], # never called
     'Pig Latin'          => [
                                 [ 'remove_matches'      , '^\s*--' ],
                                 [ 'remove_inline'       , '--.*$'  ],
@@ -9637,6 +9777,11 @@ sub set_constants {                          # {{{1
                                 [ 'remove_matches'      , '^\s*#'  ],
                                 [ 'remove_inline'       , '#.*$'   ],
                             ],
+    'TableGen'           => [
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C++'    ],
+                            ],
     'Tcl/Tk'             => [
                                 [ 'remove_matches'      , '^\s*#'  ],
                                 [ 'remove_inline'       , '#.*$'   ],
@@ -9646,6 +9791,9 @@ sub set_constants {                          # {{{1
     'TeX'                => [
                                 [ 'remove_matches'      , '^\s*%'  ],
                                 [ 'remove_inline'       , '%.*$'   ],
+                            ],
+    'Text'               => [
+                                [ 'remove_matches'      , '^\s*$'  ],
                             ],
     'Thrift'             => [
                                 [ 'rm_comments_in_strings', '"', '/*', '*/' ],
@@ -9862,6 +10010,13 @@ sub set_constants {                          # {{{1
                                 [ 'rm_comments_in_strings', '"', '//', '' ],
                                 [ 'call_regexp_common'  , 'C'      ],
                             ],
+    'X++'                => [
+                                [ 'remove_matches', '\s*#\s*//' ],
+                                [ 'remove_between_regex', '#\s*/\*', '\*/' ],
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C++'    ],
+                            ],
     'XMI'                => [
                                 [ 'remove_html_comments',          ],
                                 [ 'call_regexp_common'  , 'HTML'   ],
@@ -9890,6 +10045,11 @@ sub set_constants {                          # {{{1
                                 [ 'call_regexp_common'  , 'HTML'   ], ],
     'MSBuild script'    => [    [ 'remove_html_comments',          ],
                                 [ 'call_regexp_common'  , 'HTML'   ], ],
+    'Visual Studio Module' => [
+                                [ 'rm_comments_in_strings', '"', '/*', '*/' ],
+                                [ 'rm_comments_in_strings', '"', '//', '' ],
+                                [ 'call_regexp_common'  , 'C++'    ],
+                            ],
     'Visual Studio Solution' => [
                                 [ 'remove_matches'      , '^\s*#'  ],
                                 [ 'remove_html_comments',          ],
@@ -9925,6 +10085,7 @@ sub set_constants {                          # {{{1
     'D'                  =>     '\\\\$'         ,
     'Dart'               =>     '\\\\$'         ,
     'Expect'             =>     '\\\\$'         ,
+    'Futhark'            =>     '\\\\$'         ,
     'Gencat NLS'         =>     '\\\\$'         ,
     'Go'                 =>     '\\\\$'         ,
     'IDL'                =>     '\$\\$'         ,
@@ -9969,6 +10130,7 @@ sub set_constants {                          # {{{1
     'lex'                =>     '\\\\$'         ,
     'Vala'               =>     '\\\\$'         ,
     'Vala Header'        =>     '\\\\$'         ,
+    'X++'                =>     '\\\\$'         ,
     'zsh'                =>     '\\\\$'         ,
     );
 # 1}}}
@@ -9992,6 +10154,7 @@ sub set_constants {                          # {{{1
    'bdf'       => 1,
    'bmp'       => 1,
    'bz2'       => 1,  # bzip2(1) compressed file
+   'csv'       => 1,
    'desktop'   => 1,
    'dic'       => 1,
    'doc'       => 1,
@@ -10000,6 +10163,7 @@ sub set_constants {                          # {{{1
    'fig'       => 1,
    'gif'       => 1,
    'gz'        => 1,
+   'h5'        => 1,  # hierarchical data format
    'hdf'       => 1,  # hierarchical data format
    'in'        => 1,  # Debatable.
    'jpg'       => 1,
@@ -10014,20 +10178,22 @@ sub set_constants {                          # {{{1
    'pdf'       => 1,
    'pfb'       => 1,
    'png'       => 1,
+   'ppt'       => 1,
+   'pptx'      => 1,
    'ps'        => 1,  # Postscript is _USUALLY_ generated automatically.
    'sgm'       => 1,
    'sgml'      => 1,
    'so'        => 1,  # Dynamically-loaded object code.
    'Tag'       => 1,
-   'text'      => 1,
    'tfm'       => 1,
    'tgz'       => 1,  # gzipped tarball
    'tiff'      => 1,
    'tsv'       => 1,  # tab separated values
-   'txt'       => 1,
    'vf'        => 1,
    'wav'       => 1,
    'xbm'       => 1,
+   'xls'       => 1,
+   'xlsx'      => 1,
    'xpm'       => 1,
    'Y'         => 1,  # file compressed with "Yabba"
    'Z'         => 1,  # file compressed with "compress"
@@ -10168,12 +10334,7 @@ sub set_constants {                          # {{{1
     'common lisp'                  =>   1.25,
     'concurrent pascal'            =>   1.00,
     'conniver'                     =>   1.25,
-    'cool:gen/ief'                 =>   2.58,
     'Coq'                          =>   5.00,
-    'coral 66'                     =>   0.75,
-    'corvet'                       =>   4.21,
-    'corvision'                    =>   5.33,
-    'cpl'                          =>   0.50,
     'Crystal'                      =>   2.50,
     'Crystal Reports'              =>   4.00,
     'csl'                          =>   1.63,
@@ -10184,80 +10345,38 @@ sub set_constants {                          # {{{1
     'CSV'                          =>   0.1,
     'Cucumber'                     =>   3.00,
     'CUDA'                         =>   1.00,
-    'culprit'                      =>   1.57,
-    'cxpert'                       =>   1.63,
-    'cygnet'                       =>   4.21,
     'D'                            =>   1.70,
     'DAL'                          =>   1.50,
     'Dart'                         =>   2.00,
+    'DenizenScript'                =>   1.00,
     'data base default'            =>   2.00,
-    'dataflex'                     =>   2.00,
-    'datatrieve'                   =>   4.00,
-    'dbase iii'                    =>   2.00,
-    'dbase iv'                     =>   1.54,
     'Delphi Form'                  =>   2.00,
     'DIET'                         =>   2.00,
     'diff'                         =>   1.00,
-    'decision support default'     =>   2.22,
-    'decrally'                     =>   2.00,
-    'delphi'                       =>   2.76,
+    'Derw'                         =>   3.00,
     'dhall'                        =>   2.11,
     'DITA'                         =>   1.90,
-    'dl/1'                         =>   2.00,
     'dtrace'                       =>   2.00,
     'NASTRAN DMAP'                 =>   2.35,
-    'dna4'                         =>   4.21,
     'DOORS Extension Language'     =>   1.50,
     'Dockerfile'                   =>   2.00,
     'DOS Batch'                    =>   0.63,
     'Drools'                       =>   2.00,
-    'dsp assembly'                 =>   0.50,
-    'dtabl'                        =>   1.74,
-    'dtipt'                        =>   1.74,
-    'dyana'                        =>   1.13,
-    'dynamoiii'                    =>   1.74,
-    'easel'                        =>   2.76,
-    'easy'                         =>   1.63,
-    'easytrieve+'                  =>   2.35,
-    'eclipse'                      =>   1.63,
     'ECPP'                         =>   1.90,
     'eda/sql'                      =>   6.67,
     'edscheme 3.4'                 =>   1.51,
     'EEx'                          =>   2.00,
-    'eiffel'                       =>   3.81,
     'EJS'                          =>   2.50,
     'Elixir'                       =>   2.11,
     'Elm'                          =>   2.50,
-    'enform'                       =>   1.74,
-    'englishbased default'         =>   1.51,
-    'ensemble'                     =>   2.76,
-    'epos'                         =>   4.00,
     'Embedded Crystal'             =>   2.00,
     'ERB'                          =>   2.00,
     'Erlang'                       =>   2.11,
-    'esf'                          =>   2.00,
-    'espadvisor'                   =>   1.63,
-    'espl/i'                       =>   1.13,
-    'euclid'                       =>   0.75,
-    'excel'                        =>   1.74,
-    'excel 12'                     =>  13.33,
-    'excel 34'                     =>  13.33,
-    'excel 5'                      =>  13.33,
-    'express'                      =>   2.22,
-    'exsys'                        =>   1.63,
     'extended common lisp'         =>   1.43,
-    'eznomad'                      =>   2.22,
-    'facets'                       =>   4.00,
-    'factorylink iv'               =>   2.76,
-    'fame'                         =>   2.22,
     'Fennel'                       =>   2.50,
     'filemaker pro'                =>   2.22,
-    'flavors'                      =>   2.76,
-    'flex'                         =>   1.74,
-    'flexgen'                      =>   2.76,
+    'Finite State Language'        =>   2.00,
     'Focus'                        =>   1.90,
-    'foil'                         =>   1.51,
-    'forte'                        =>   4.44,
     'Forth'                        =>   1.25,
     'Fortran 66'                   =>   0.63,
     'Fortran 77'                   =>   0.75,
@@ -10270,8 +10389,10 @@ sub set_constants {                          # {{{1
     'foxpro 2.5'                   =>   2.35,
     'framework'                    =>  13.33,
     'Freemarker Template'          =>   1.48,
+    'Futhark'                      =>   3.00, # Guessed from value of ML
     'F#'                           =>   2.50,
     'F# Script'                    =>   2.50,
+    'Flatbuffers'                  =>   2.50,
     'g2'                           =>   1.63,
     'gamma'                        =>   5.00,
     'genascript'                   =>   2.96,
@@ -10291,6 +10412,7 @@ sub set_constants {                          # {{{1
     'GDScript'                     =>   2.50,
     'Godot Scene'                  =>   2.50,
     'Godot Resource'               =>   2.50,
+    'Godot Shaders'                =>   2.50,
     'Go'                           =>   2.50,
     'Gradle'                       =>   4.00,
     'Grails'                       =>   1.48,
@@ -10308,6 +10430,7 @@ sub set_constants {                          # {{{1
     'Haxe'                         =>   2.00,
     'Hoon'                         =>   2.00,
     'HTML'                         =>   1.90,
+    'HTML EEx'                     =>   3.00,
     'XHTML'                        =>   1.90,
     'XMI'                          =>   1.90,
     'XML'                          =>   1.90,
@@ -10318,6 +10441,7 @@ sub set_constants {                          # {{{1
     'XSD'                          =>   1.90,
     'NAnt script'                  =>   1.90,
     'MSBuild script'               =>   1.90,
+    'Visual Studio Module'         =>   1.00,
     'Visual Studio Solution'       =>   1.00,
     'HLSL'                         =>   2.00,
     'HTML 2'                       =>   5.00,
@@ -10336,10 +10460,6 @@ sub set_constants {                          # {{{1
     'idms'                         =>   2.00,
     'Idris'                        =>   2.00,
     'Literate Idris'               =>   2.00,
-    'ief'                          =>   5.71,
-    'ief/cool:gen'                 =>   2.58,
-    'iew'                          =>   5.71,
-    'ifps/plus'                    =>   2.50,
     'Igor Pro'                     =>   4.00,
     'Imba'                         =>   3.00,
     'imprs'                        =>   2.00,
@@ -10391,6 +10511,7 @@ sub set_constants {                          # {{{1
     'lattice c'                    =>   0.63,
     'Lean'                         =>   3.00,
     'LESS'                         =>   1.50,
+    'Lem'                          =>   3.00,
     'LFE'                          =>   1.25,
     'liana'                        =>   0.63,
     'lilith'                       =>   1.13,
@@ -10489,6 +10610,10 @@ sub set_constants {                          # {{{1
     'Pascal'                       =>   0.88,
     'Patran Command Language'      =>   2.50,
     'Perl'                         =>   4.00,
+    'PEG'                          =>   3.00,
+    'peg.js'                       =>   3.00,
+    'peggy'                        =>   3.00,
+    'tspeg'                        =>   3.00,
     'Pig Latin'                    =>   1.00,
     'PL/I'                         =>   1.38,
     'pl/1'                         =>   1.38,
@@ -10633,11 +10758,13 @@ sub set_constants {                          # {{{1
     'synon/2e'                     =>   4.21,
     'systemw'                      =>   2.22,
     'tandem access language'       =>   0.88,
+    'TableGen'                     =>   2.00,
     'Tcl/Tk'                       =>   4.00,
     'Teamcenter def'               =>   1.00,
     'Teamcenter met'               =>   1.00,
     'Teamcenter mth'               =>   1.00,
     'TeX'                          =>   1.50,
+    'Text'                         =>   0.50,
     'telon'                        =>   5.00,
     'tessaract'                    =>   2.00,
     'the twin'                     =>  13.33,
@@ -10699,6 +10826,7 @@ sub set_constants {                          # {{{1
     'xBase'                        =>   2.00,
     'xBase Header'                 =>   2.00,
     'xlisp'                        =>   1.25,
+    'X++'                          =>   1.51, # This is a guess. Copied from C++, because the overhead for C++ headers might be equivalent to the overhead of structuring elements in XPO files
     'XAML'                         =>   1.90,
     'XQuery'                       =>   2.50,
     'yacc'                         =>   1.51,
@@ -14661,7 +14789,7 @@ my @generic = (
      from_to   => [['<?_c', '_c?>']],
     },
 
-    {languages => [qw /C++/, 'C#', qw /Cg ECMAScript FPL Java JavaScript/],
+    {languages => [qw /C++/, 'C#', 'X++', qw /Cg ECMAScript FPL Java JavaScript/],
      to_eol    => ['//'],
      from_to   => [[qw {/* */}]]},
 
@@ -17105,3 +17233,4 @@ file:  33188   33206
 dir :  16832   16895
 link:  33261   33206
 pipe:   4544    null
+if ($opt_vcs eq "git" or $opt_force_git);
