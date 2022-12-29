@@ -80,13 +80,25 @@ Usage: cloc [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <report 
                              relative path names will be resolved starting from
                              the directory where cloc is invoked.  Set <file>
                              to - to read file names from a STDIN pipe.
-                             See also --exclude-list-file.
+                             See also --exclude-list-file, --config.
    --diff-list-file=<file>   Take the pairs of file names to be diff'ed from
                              <file>, whose format matches the output of
                              --diff-alignment.  (Run with that option to
                              see a sample.)  The language identifier at the
                              end of each line is ignored.  This enables --diff
                              mode and bypasses file pair alignment logic.
+                             Use --diff-list-files to define the file name
+                             pairs in separate files. See also --config.
+   --diff-list-files <file1> <file2>
+                             Compute differences in code and comments between
+                             the files and directories listed in <file1> and
+                             <file2>.  Each input file should use the same
+                             format as --list-file, where there is one file or
+                             directory name per line.  Only exact matches are
+                             counted; relative path names will be resolved
+                             starting from the directory where cloc is invoked.
+                             This enables --diff mode.  See also --list-file,
+                             --diff-list-file, --diff.
    --vcs=<VCS>               Invoke a system call to <VCS> to obtain a list of
                              files to work on.  If <VCS> is 'git', then will
                              invoke 'git ls-files' to get a file list and
@@ -128,6 +140,11 @@ Usage: cloc [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <report 
                              beginning with '#' are skipped.  Options given on
                              the command line take priority over entries read from
                              the file.
+                             If a directory is also given with any of these
+                             switches: --list-file, --exclude-list-file,
+                             --read-lang-def, --force-lang-def, --diff-list-file
+                             and a config file exists in that directory, it will
+                             take priority over $config_file.
    --count-and-diff <set1> <set2>
                              First perform direct code counts of source file(s)
                              of <set1> and <set2> separately, then perform a diff
@@ -184,7 +201,7 @@ Usage: cloc [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <report 
                              definition files.  Use --read-lang-def to define
                              new language filters without replacing built-in
                              filters (see also --write-lang-def,
-                             --write-lang-def-incl-dup).
+                             --write-lang-def-incl-dup, --config).
    --git                     Forces the inputs to be interpreted as git targets
                              (commit hashes, branch names, et cetera) if these
                              are not first identified as file or directory
@@ -232,6 +249,8 @@ Usage: cloc [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <report 
                              such as GNU autoconf.  To see a list of these files
                              (then exit), run with --no-autogen list
                              See also --autoconf.
+   --no-recurse              Count files in the given directories without
+                             recursively descending below them.
    --original-dir            [Only effective in combination with
                              --strip-comments]  Write the stripped files
                              to the same directory as the original files.
@@ -245,7 +264,7 @@ Usage: cloc [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <report 
                              about, cloc's definition will take precedence.
                              Use --force-lang-def to over-ride cloc's
                              definitions (see also --write-lang-def,
-                             --write-lang-def-incl-dup).
+                             --write-lang-def-incl-dup, --config).
    --script-lang=<lang>,<s>  Process all files that invoke <s> as a #!
                              scripting language with the counter for language
                              <lang>.  For example, files that begin with
@@ -261,6 +280,13 @@ Usage: cloc [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <report 
                              letting File::Temp chose the location.  Files
                              written to this location are not removed at
                              the end of the run (as they are with File::Temp).
+   --skip-leading=<N[,ext]>  Skip the first <N> lines of each file.  If a
+                             comma separated list of extensions is also given,
+                             only skip lines from those file types.  Example:
+                               --skip-leading=10,cpp,h
+                             will skip the first ten lines of *.cpp and *.h
+                             files.  This is useful for ignoring boilerplate
+                             text.
    --skip-uniqueness         Skip the file uniqueness check.  This will give
                              a performance boost at the expense of counting
                              files with identical contents multiple times
@@ -271,7 +297,7 @@ Usage: cloc [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <report 
                              cloc may undercount or completely skip the
                              contents of such file systems.  This switch forces
                              File::Find to stat directories to obtain the
-                             correct count.  File search spead will decrease.
+                             correct count.  File search speed will decrease.
                              See also --follow-links.
    --stdin-name=<file>       Give a file name to use to determine the language
                              for standard input.  (Use - as the input name to
@@ -351,7 +377,7 @@ Usage: cloc [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <report 
                              name per line.  Only exact matches are ignored;
                              relative path names will be resolved starting from
                              the directory where cloc is invoked.
-                             See also --list-file.
+                             See also --list-file, --config.
    --fullpath                Modifies the behavior of --match-f, --not-match-f,
                              and --not-match-d to include the file's path
                              in the regex, not just the file's basename.
@@ -365,9 +391,9 @@ Usage: cloc [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <report 
                              separated file extensions.  Use --show-ext to
                              see the recognized extensions.
    --include-lang=<L1>[,L2[...]]
-                             Count only the given comma separated languages
-                             L1, L2, L3, et cetera.  Use --show-lang to see
-                             the list of recognized languages.
+                             Count only the given comma separated, case-
+                             insensitive languages L1, L2, L3, et cetera.  Use
+                             --show-lang to see the list of recognized languages.
    --match-d=<regex>         Only count files in directories matching the Perl
                              regex.  For example
                                --match-d='/(src|include)/'
@@ -397,7 +423,7 @@ Usage: cloc [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <report 
                              the basename.
    --skip-archive=<regex>    Ignore files that end with the given Perl regular
                              expression.  For example, if given
-                               --skip-archive='(zip|tar(.(gz|Z|bz2|xz|7z))?)'
+                               --skip-archive='(zip|tar(\.(gz|Z|bz2|xz|7z))?)'
                              the code will skip files that end with .zip,
                              .tar, .tar.gz, .tar.Z, .tar.bz2, .tar.xz, and
                              .tar.7z.
@@ -448,11 +474,11 @@ Usage: cloc [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <report 
                              while others were produced without it.)
    --by-percent  X           Instead of comment and blank line counts, show
                              these values as percentages based on the value
-                             of X in the denominator:
-                                X = 'c'   -> # lines of code
-                                X = 'cm'  -> # lines of code + comments
-                                X = 'cb'  -> # lines of code + blanks
-                                X = 'cmb' -> # lines of code + comments + blanks
+                             of X in the denominator, where X is
+                                 c    meaning lines of code
+                                 cm   meaning lines of code + comments
+                                 cb   meaning lines of code + blanks
+                                 cmb  meaning lines of code + comments + blanks
                              For example, if using method 'c' and your code
                              has twice as many lines of comments as lines
                              of code, the value in the comment column will
@@ -478,6 +504,16 @@ Usage: cloc [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <report 
    --quiet                   Suppress all information messages except for
                              the final report.
    --report-file=<file>      Write the results to <file> instead of STDOUT.
+   --summary-cutoff=X:N      Aggregate to 'Other' results having X lines
+                             below N where X is one of
+                                c   meaning lines of code
+                                f   meaning files
+                                m   meaning lines of comments
+                                cm  meaning lines of code + comments
+                             Appending a percent sign to N changes
+                             the calculation from straight count to
+                             percentage.
+                             Ignored with --diff or --by-file.
    --sql=<file>              Write results as SQL create and insert statements
                              which can be read by a database program such as
                              SQLite.  If <file> is -, output is sent to STDOUT.
