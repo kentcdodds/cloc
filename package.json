@@ -24,5 +24,8 @@
   "homepage": "https://github.com/kentcdodds/cloc#readme",
   "scripts": {
     "update": "./other/update"
+  },
+  "devDependencies": {
+    "node-fetch-native": "^1.0.2"
   }
 }
