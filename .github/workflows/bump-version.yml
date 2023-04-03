@@ -7,7 +7,6 @@ on:
 jobs:
   bump:
     runs-on: ubuntu-latest
-    continue-on-error: true
     permissions:
       contents: write
     steps:
@@ -29,7 +28,7 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git commit -a -m "chore: bump cloc version"
+          (git commit -a -m "chore: bump cloc version") || true
 
       - name: Push changes
         uses: ad-m/github-push-action@master
