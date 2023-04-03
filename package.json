@@ -23,7 +23,8 @@
   },
   "homepage": "https://github.com/kentcdodds/cloc#readme",
   "scripts": {
-    "update": "./other/update"
+    "update": "./other/update",
+    "bump-version": "node ./other/bump-version.mjs"
   },
   "devDependencies": {
     "node-fetch-native": "^1.0.2"

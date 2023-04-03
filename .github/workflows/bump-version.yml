@@ -1,0 +1,33 @@
+name: Bump Version
+on:
+  schedule:
+    - cron: "0 0 * * 1"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v2
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v1
+        with:
+          node-version: 16
+
+      - name: 📦 Install dependencies
+        run: npm install
+      
+      - name: 🚀 Bump Version
+        run: npm run bump-version
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git commit -a -m "feat: bump cloc version"
+
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          branch: ${{ github.head_ref }}
