@@ -6,7 +6,7 @@ async function main () {
   const latestVersion = await fetch("https://api.github.com/repos/AlDanial/cloc/releases/latest")
     .then(res => res.json())
     .then(json => json.tag_name);
-  const versionPath = path.join(process.cwd(), "version.txt")
+  const versionPath = path.join(process.cwd(), "other/version.txt")
   const lastCheckedVersion = await readFile(versionPath, { encoding: "utf-8" });
   if (latestVersion === lastCheckedVersion) {
     console.log("Already up to date");
