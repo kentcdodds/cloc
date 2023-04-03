@@ -5,7 +5,7 @@ on:
     - cron: "0 0 * * 1"
 
 jobs:
-  release:
+  bump:
     runs-on: ubuntu-latest
     steps:
       - name: ⬇️ Checkout repo
