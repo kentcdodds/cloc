@@ -6,6 +6,9 @@
   "bin": {
     "cloc": "lib/cloc"
   },
+  "files": [
+    "lib"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/kentcdodds/cloc.git"
