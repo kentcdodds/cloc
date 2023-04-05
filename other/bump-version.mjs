@@ -10,8 +10,8 @@ const clocPath = path.join(libPath, "cloc");
 const readJson = async path => JSON.parse(await readFile(path))
 const readPackageJson = () => readJson(packageJsonPath);
 const exists = access(path).then(
-	() => true,
-	() => false,
+  () => true,
+  () => false,
 );
 /**
  * @param {string} version
