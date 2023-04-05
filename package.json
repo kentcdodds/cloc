@@ -1,11 +1,14 @@
 {
   "name": "cloc",
-  "version": "0.0.0-development",
+  "version": "1.96.0-cloc",
   "description": "An npm module for distributing cloc by Al Danial https://github.com/AlDanial/cloc",
   "main": "lib/cloc",
   "bin": {
     "cloc": "lib/cloc"
   },
+  "files": [
+    "lib"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/kentcdodds/cloc.git"
@@ -23,6 +26,10 @@
   },
   "homepage": "https://github.com/kentcdodds/cloc#readme",
   "scripts": {
-    "update": "./other/update"
+    "update": "./other/update",
+    "bump-version": "node ./other/bump-version.mjs"
+  },
+  "devDependencies": {
+    "node-fetch-native": "^1.0.2"
   }
 }
