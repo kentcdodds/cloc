@@ -22,7 +22,9 @@ jobs:
         run: npm install
       
       - name: 🚀 Bump Version
-        run: npm run bump-version
+        run: |
+          npm run bump-version
+          npm install
 
       - name: Commit changes
         run: |
