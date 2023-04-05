@@ -27,7 +27,7 @@ function normalizeClocVersion (version) {
  * 1.96.1 => 1.96.1
  */
 function normalizedClocVersionToOriginal (normalizeVersion) {
-  const parts = normalizeVersion.replace("-cloc", "").split(".");
+  const parts = normalizeVersion.replace(/-cloc$/, "").split(".");
   if (parts[2] === "0") {
     parts.pop();
   }
