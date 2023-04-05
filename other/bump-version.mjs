@@ -1,4 +1,5 @@
-import { readFile, writeFile, chmod, access } from "node:fs/promises";
+//@ts-check
+import { readFile, writeFile, chmod, access, mkdir } from "node:fs/promises";
 import path from "node:path";
 
 import { fetch } from "node-fetch-native";
@@ -7,7 +8,7 @@ const cwd = process.cwd()
 const packageJsonPath = path.join(cwd, "package.json")
 const libPath = path.join(cwd, "lib");
 const clocPath = path.join(libPath, "cloc");
-const readJson = async path => JSON.parse(await readFile(path))
+const readJson = async path => JSON.parse(await readFile(path, { encoding: "utf-8" }))
 const readPackageJson = () => readJson(packageJsonPath);
 const exists = path => access(path).then(
   () => true,
@@ -32,8 +33,8 @@ function normalizeClocVersion (version) {
  * 1.96.0 => 1.96
  * 1.96.1 => 1.96.1
  */
-function normalizedClocVersionToOriginal (normalizeVersion) {
-  const parts = normalizeVersion.replace(/-cloc$/, "").split(".");
+function normalizedClocVersionToOriginal (normalizedVersion) {
+  const parts = normalizedVersion.replace(/-cloc$/, "").split(".");
   if (parts[2] === "0") {
     parts.pop();
   }
