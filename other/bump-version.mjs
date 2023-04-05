@@ -1,10 +1,12 @@
-import { readFile, writeFile, chmod } from "node:fs/promises";
+import { readFile, writeFile, chmod, stat } from "node:fs/promises";
 import path from "node:path";
+
 import { fetch } from "node-fetch-native";
 
 const cwd = process.cwd()
 const packageJsonPath = path.join(cwd, "package.json")
-const clocPath = path.join(cwd, "lib/cloc");
+const libPath = path.join(cwd, "lib");
+const clocPath = path.join(libPath, "cloc");
 const readJson = async path => JSON.parse(await readFile(path))
 const readPackageJson = async () => await readJson(packageJsonPath);
 /**
@@ -59,6 +61,9 @@ async function main () {
     process.exit(1);
   }
   console.log(`Updating from ${"v" + lastCheckedVersion} to ${latestVersion}`);
+  if (!await stat(libPath)) {
+    await mkdir(libPath);
+  }
   await fetch(`https://github.com/AlDanial/cloc/releases/download/${latestVersion}/cloc-${latestVersionWithoutV}.pl`)
     .then(res => res.text())
     .then(text => writeFile(clocPath, text));
