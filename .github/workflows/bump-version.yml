@@ -34,15 +34,3 @@ jobs:
         uses: ad-m/github-push-action@master
         with:
           branch: ${{ github.head_ref }}
-
-      - name: 🚀 Release
-        uses: cycjimmy/semantic-release-action@v2
-        with:
-          semantic_version: 17
-          branches: |
-            [
-              "main",
-            ]
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
