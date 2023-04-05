@@ -9,7 +9,7 @@ const libPath = path.join(cwd, "lib");
 const clocPath = path.join(libPath, "cloc");
 const readJson = async path => JSON.parse(await readFile(path))
 const readPackageJson = () => readJson(packageJsonPath);
-const exists = access(path).then(
+const exists = path => access(path).then(
   () => true,
   () => false,
 );
