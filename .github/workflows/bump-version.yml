@@ -29,6 +29,7 @@ jobs:
           npm install
 
       - name: Commit changes
+        if: always()
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
@@ -36,11 +37,13 @@ jobs:
           git commit -m "chore: bump cloc version"
 
       - name: Push changes
+        if: always()
         uses: ad-m/github-push-action@master
         with:
           branch: ${{ github.head_ref }}
       
       - name: Publish package
+        if: always()
         uses: JS-DevTools/npm-publish@v1
         with:
           token: ${{ secrets.NPM_TOKEN }}
