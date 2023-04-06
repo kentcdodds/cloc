@@ -24,7 +24,7 @@ jobs:
       - name: 🚀 Bump Version
         id: bump
         run: |
-          npm run bump-version || (echo "BUMP_FAILED=true" >> $GITHUB_OUTPUT && exit)
+          npm run bump-version || (echo "BUMP_FAILED=true" >> $GITHUB_OUTPUT && exit 0)
           echo "BUMP_FAILED=false" >> $GITHUB_OUTPUT
           npm install
 
