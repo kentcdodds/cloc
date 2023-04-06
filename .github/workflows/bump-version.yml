@@ -7,7 +7,6 @@ on:
 jobs:
   bump:
     runs-on: ubuntu-latest
-    continue-on-error: true
     permissions:
       contents: write
     steps:
@@ -24,23 +23,27 @@ jobs:
       
       - name: 🚀 Bump Version
         id: bump
+        continue-on-error: true
         run: |
-          npm run bump-version || true
+          npm run bump-version
           npm install
 
       - name: Commit changes
+        if: steps.bump.outcome == 'success' && steps.bump.conclusion == 'success'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add package.json package-lock.json
-          git commit -m "chore: bump cloc version" || true
+          git commit -m "chore: bump cloc version"
 
       - name: Push changes
+        if: steps.bump.outcome == 'success' && steps.bump.conclusion == 'success'
         uses: ad-m/github-push-action@master
         with:
           branch: ${{ github.head_ref }}
       
       - name: Publish package
+        if: steps.bump.outcome == 'success' && steps.bump.conclusion == 'success'
         uses: JS-DevTools/npm-publish@v1
         with:
           token: ${{ secrets.NPM_TOKEN }}
