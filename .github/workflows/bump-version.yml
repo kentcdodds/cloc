@@ -22,11 +22,13 @@ jobs:
         run: npm install
       
       - name: 🚀 Bump Version
+        id: bump
         run: |
-          npm run bump-version
+          npm run bump-version || echo "BUMP_FAILED=true" >> $GITHUB_OUTPUT
           npm install
 
       - name: Commit changes
+        if: steps.bump.outputs.BUMP_FAILED != "true"
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
@@ -34,11 +36,13 @@ jobs:
           git commit -m "chore: bump cloc version"
 
       - name: Push changes
+        if: steps.bump.outputs.BUMP_FAILED != "true"
         uses: ad-m/github-push-action@master
         with:
           branch: ${{ github.head_ref }}
       
       - name: Publish package
+        if: steps.bump.outputs.BUMP_FAILED != "true"
         uses: JS-DevTools/npm-publish@v1
         with:
           token: ${{ secrets.NPM_TOKEN }}
