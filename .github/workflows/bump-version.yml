@@ -24,12 +24,12 @@ jobs:
       - name: 🚀 Bump Version
         id: bump
         run: |
-          npm run bump-version || echo "BUMP_FAILED='true'" >> $GITHUB_OUTPUT
-          echo "BUMP_FAILED='no'" >> $GITHUB_OUTPUT
+          npm run bump-version || (echo "BUMP_FAILED=true" >> $GITHUB_OUTPUT)
+          echo "BUMP_FAILED=false" >> $GITHUB_OUTPUT
           npm install
 
       - name: Commit changes
-        if: steps.bump.outputs.BUMP_FAILED == "'false'"
+        if: ${{ steps.random-color-generator.outputs.SELECTED_COLOR }} == "false"
         run: |
           echo ${{ steps.bump.outputs.BUMP_FAILED }}
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
@@ -38,13 +38,13 @@ jobs:
           git commit -m "chore: bump cloc version"
 
       - name: Push changes
-        if: steps.bump.outputs.BUMP_FAILED == "'false'"
+        if: ${{ steps.random-color-generator.outputs.SELECTED_COLOR }} == "false"
         uses: ad-m/github-push-action@master
         with:
           branch: ${{ github.head_ref }}
       
       - name: Publish package
-        if: steps.bump.outputs.BUMP_FAILED == "'false'"
+        if: ${{ steps.random-color-generator.outputs.SELECTED_COLOR }} == "false"
         uses: JS-DevTools/npm-publish@v1
         with:
           token: ${{ secrets.NPM_TOKEN }}
