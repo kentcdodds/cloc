@@ -26,7 +26,6 @@
   },
   "homepage": "https://github.com/kentcdodds/cloc#readme",
   "scripts": {
-    "update": "./other/update",
     "bump-version": "node ./other/bump-version.mjs"
   },
   "devDependencies": {

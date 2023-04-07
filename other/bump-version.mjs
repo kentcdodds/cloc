@@ -1,4 +1,4 @@
-//@ts-check
+// @ts-check
 import { readFile, writeFile, chmod, access, mkdir } from "node:fs/promises";
 import path from "node:path";
 
