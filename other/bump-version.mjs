@@ -63,7 +63,7 @@ async function main () {
   const lastCheckedVersion = await getVersionFromPackageJson();
   if (latestVersionWithoutV === lastCheckedVersion) {
     console.log("Already up to date");
-    return;
+    process.exit(1);
   }
   console.log(`Updating from ${"v" + lastCheckedVersion} to ${latestVersion}`);
   if (!await exists(libPath)) {
