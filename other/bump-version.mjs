@@ -19,13 +19,14 @@ const exists = path => access(path).then(
  * Normalizes cloc version:
  * 1.96 => 1.96.0
  * 1.96.1 => 1.96.1
+ * 2.00.0 => 2.0.0
  */
 function normalizeClocVersion (version) {
   const parts = version.split(".");
   if (parts.length === 2) {
     parts.push("0");
   }
-  return parts.join(".");
+  return parts.map(p => Number(p)).join(".");
 }
 /**
  * @param {string} normalizedVersion
