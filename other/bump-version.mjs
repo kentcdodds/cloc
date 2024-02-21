@@ -61,8 +61,9 @@ async function main () {
     .then(res => res.json())
     .then(json => json.tag_name);
   const latestVersionWithoutV = latestVersion.replace(/^v/, "");
+  const normalizedVersion = normalizeClocVersion(latestVersionWithoutV);
   const lastCheckedVersion = await getVersionFromPackageJson();
-  if (latestVersionWithoutV === lastCheckedVersion) {
+  if (normalizedVersion === lastCheckedVersion) {
     console.log("Already up to date");
     process.exit(1);
   }
@@ -75,7 +76,7 @@ async function main () {
     .then(text => writeFile(clocPath, text));
   await chmod(clocPath, 0o755);
   // Cloc 
-  await bumpPackageJsonVersion(normalizeClocVersion(latestVersionWithoutV) + "-cloc");
+  await bumpPackageJsonVersion(normalizedVersion + "-cloc");
   console.log("Done");
 }
 
