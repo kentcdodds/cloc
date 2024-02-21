@@ -40,7 +40,7 @@ async function bumpPackageJsonVersion (version) {
 
 async function getVersionFromPackageJson () {
   const packageJson = await readPackageJson();
-  return packageJson.version;
+  return packageJson.version.replace(/^v/, "").replace('-cloc', '');
 }
 
 async function main () {
