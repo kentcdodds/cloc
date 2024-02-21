@@ -28,19 +28,6 @@ function normalizeClocVersion (version) {
   }
   return parts.map(p => Number(p)).join(".");
 }
-/**
- * @param {string} normalizedVersion
- * Converts the normalized version to original version:
- * 1.96.0 => 1.96
- * 1.96.1 => 1.96.1
- */
-function normalizedClocVersionToOriginal (normalizedVersion) {
-  const parts = normalizedVersion.replace(/-cloc$/, "").split(".");
-  if (parts[2] === "0") {
-    parts.pop();
-  }
-  return parts.join(".");
-}
 
 /**
  * @param {string} version
@@ -53,7 +40,7 @@ async function bumpPackageJsonVersion (version) {
 
 async function getVersionFromPackageJson () {
   const packageJson = await readPackageJson();
-  return normalizedClocVersionToOriginal(packageJson.version);
+  return packageJson.version;
 }
 
 async function main () {
@@ -67,7 +54,7 @@ async function main () {
     console.log("Already up to date");
     process.exit(1);
   }
-  console.log(`Updating from ${"v" + lastCheckedVersion} to ${latestVersion}`);
+  console.log(`Updating from v${lastCheckedVersion} to ${normalizedVersion}`);
   if (!await exists(libPath)) {
     await mkdir(libPath);
   }
