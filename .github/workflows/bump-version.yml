@@ -41,11 +41,15 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add package.json package-lock.json
+          if git diff --cached --quiet; then
+            echo "sha=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           git commit -m "chore: bump cloc version"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Push changes
-        if: steps.bump.outcome == 'success' && steps.bump.conclusion == 'success'
+        if: steps.bump.outcome == 'success' && steps.bump.conclusion == 'success' && steps.commit.outputs.sha != ''
         run: git push origin HEAD:${{ github.ref_name }}
 
   publish:
@@ -69,4 +73,4 @@ jobs:
           package-manager-cache: false
 
       - name: 🚀 Publish package
-        run: npm publish
+        run: npm publish --provenance
