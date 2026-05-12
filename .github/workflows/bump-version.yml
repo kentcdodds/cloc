@@ -5,49 +5,68 @@ on:
     - cron: "0 1 * * *"
 
 permissions:
-  contents: write # to be able to publish a GitHub release
-  id-token: write # to enable use of OIDC for npm provenance
-  issues: write # to be able to comment on released issues
-  pull-requests: write # to be able to comment on released pull requests
+  contents: read
 
 jobs:
   bump:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: ⎔ Setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 24
+          package-manager-cache: false
 
       - name: 📦 Install dependencies
-        run: npm install
-      
+        run: npm ci
+
       - name: 🚀 Bump Version
         id: bump
         continue-on-error: true
         run: |
           npm run bump-version
-          npm install
+          npm install --package-lock-only
 
       - name: Commit changes
+        id: commit
         if: steps.bump.outcome == 'success' && steps.bump.conclusion == 'success'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add package.json package-lock.json
           git commit -m "chore: bump cloc version"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Push changes
         if: steps.bump.outcome == 'success' && steps.bump.conclusion == 'success'
-        uses: ad-m/github-push-action@master
+        run: git push origin HEAD:${{ github.ref_name }}
+
+  publish:
+    needs: bump
+    if: needs.bump.outputs.sha != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # to enable use of OIDC for npm provenance
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
-          branch: ${{ github.head_ref }}
-      
-      - name: Publish package
-        if: steps.bump.outcome == 'success' && steps.bump.conclusion == 'success'
-        uses: JS-DevTools/npm-publish@v4
+          ref: ${{ needs.bump.outputs.sha }}
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: 🚀 Publish package
+        run: npm publish
