@@ -24,7 +24,7 @@ http://blog.nodeknockout.com/post/65463770933/how-to-install-node-js-and-npm
 
 推荐使用 `npx` 临时安装：
 
-```
+```bash
 npx cloc [options]
 ```
 
