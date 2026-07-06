@@ -73,4 +73,7 @@ jobs:
           package-manager-cache: false
 
       - name: Publish package
-        run: npm publish --provenance
+        # The version carries a `-cloc` suffix, which npm treats as a semver
+        # prerelease. npm requires an explicit --tag for prerelease versions,
+        # so publish it under the `latest` dist-tag.
+        run: npm publish --provenance --tag latest
