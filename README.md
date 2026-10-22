@@ -538,17 +538,15 @@ Usage: cloc [options] <file(s)/dir(s)/git hash(es)> | <set 1> <set 2> | <report 
 
 ## Development
 
-To update the `cloc` version, run:
+To update the `cloc` version to the latest upstream release, run:
 
 ```
-npm run update -- VERSION
+npm run bump-version
 ```
 
-For example:
-
-```
-npm run update -- 1.88
-```
+That updates `version` and `clocVersion` in `package.json` and downloads the
+script into `lib/cloc` (gitignored). Publishing downloads `lib/cloc` again in CI
+via `npm run download-cloc` before `npm publish`.
 
 # LICENSE
 
