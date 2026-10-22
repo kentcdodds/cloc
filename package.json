@@ -1,6 +1,7 @@
 {
   "name": "cloc",
   "version": "2.10.0-cloc",
+  "clocVersion": "v2.10",
   "description": "An npm module for distributing cloc by Al Danial https://github.com/AlDanial/cloc",
   "main": "lib/cloc",
   "bin": {
@@ -26,7 +27,8 @@
   },
   "homepage": "https://github.com/kentcdodds/cloc#readme",
   "scripts": {
-    "bump-version": "node ./other/bump-version.mjs"
+    "bump-version": "node ./other/bump-version.mjs",
+    "download-cloc": "node ./other/download-cloc.mjs"
   },
   "devDependencies": {
     "node-fetch-native": "^1.0.2"
