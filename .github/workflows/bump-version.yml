@@ -93,6 +93,12 @@ jobs:
         # prerelease. npm requires an explicit --tag for prerelease versions,
         # so publish it under the `latest` dist-tag. lib/ is gitignored, so
         # download the upstream script before packing.
+        #
+        # Override GITHUB_SHA so npm provenance names the commit we checked out
+        # (bump output), not the workflow-trigger SHA. Without this, a bump that
+        # creates a commit would attest the pre-bump revision.
+        env:
+          GITHUB_SHA: ${{ needs.bump.outputs.sha }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
           if npm view "cloc@${VERSION}" version >/dev/null 2>&1; then
