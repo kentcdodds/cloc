@@ -13,7 +13,10 @@ jobs:
     permissions:
       contents: write
     outputs:
-      sha: ${{ steps.commit.outputs.sha }}
+      # Always the bump workspace HEAD: new bump commit when one was made,
+      # otherwise the checkout SHA. Publish pins to this so a later push on
+      # the branch cannot change which package.json this run publishes.
+      sha: ${{ steps.head.outputs.sha }}
     steps:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
@@ -42,15 +45,19 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git add package.json package-lock.json
           if git diff --cached --quiet; then
-            echo "sha=" >> "$GITHUB_OUTPUT"
+            echo "committed=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git commit -m "chore: bump cloc version"
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "committed=1" >> "$GITHUB_OUTPUT"
 
       - name: Push changes
-        if: steps.bump.outcome == 'success' && steps.bump.conclusion == 'success' && steps.commit.outputs.sha != ''
+        if: steps.bump.outcome == 'success' && steps.bump.conclusion == 'success' && steps.commit.outputs.committed == '1'
         run: git push origin HEAD:${{ github.ref_name }}
+
+      - name: Record HEAD for publish
+        id: head
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   publish:
     needs: bump
@@ -58,7 +65,7 @@ jobs:
     # (continue-on-error + exit 1 "Already up to date"). That lets a failed
     # prior publish be retried on the next schedule/dispatch without waiting
     # for a new upstream version.
-    if: always() && needs.bump.result == 'success'
+    if: always() && needs.bump.result == 'success' && needs.bump.outputs.sha != ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -67,9 +74,9 @@ jobs:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
-          # Fetch the branch tip after bump may have pushed, not the workflow
-          # start SHA (which would still have the pre-bump package.json).
-          ref: ${{ github.ref_name }}
+          # Pin to the bump job HEAD (new commit or no-op checkout SHA), not
+          # the moving branch tip, so this run only publishes that revision.
+          ref: ${{ needs.bump.outputs.sha }}
 
       - name: ⎔ Setup node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
