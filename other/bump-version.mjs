@@ -56,8 +56,11 @@ async function main() {
   const normalizedVersion = normalizeClocVersion(latestVersionWithoutV);
   const lastCheckedVersion = await getVersionFromPackageJson();
   if (normalizedVersion === lastCheckedVersion) {
+    // Exit 0 so CI can treat a no-op bump as success and still retry publish
+    // for a version that failed to ship earlier. Real bump failures stay
+    // non-zero and fail the job.
     console.log("Already up to date");
-    process.exit(1);
+    return;
   }
   console.log(`Updating from v${lastCheckedVersion} to ${normalizedVersion}`);
   await bumpPackageJsonVersion(normalizedVersion + "-cloc", latestVersion);

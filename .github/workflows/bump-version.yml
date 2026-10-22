@@ -32,14 +32,14 @@ jobs:
 
       - name: 🚀 Bump Version
         id: bump
-        continue-on-error: true
+        # No continue-on-error: "Already up to date" exits 0 from the script.
+        # Any other bump failure fails this job and blocks publish.
         run: |
           npm run bump-version
           npm install --package-lock-only
 
       - name: Commit changes
         id: commit
-        if: steps.bump.outcome == 'success' && steps.bump.conclusion == 'success'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
@@ -52,7 +52,7 @@ jobs:
           echo "committed=1" >> "$GITHUB_OUTPUT"
 
       - name: Push changes
-        if: steps.bump.outcome == 'success' && steps.bump.conclusion == 'success' && steps.commit.outputs.committed == '1'
+        if: steps.commit.outputs.committed == '1'
         run: git push origin HEAD:${{ github.ref_name }}
 
       - name: Record HEAD for publish
@@ -61,11 +61,11 @@ jobs:
 
   publish:
     needs: bump
-    # Run after a successful bump job even when the bump step was a no-op
-    # (continue-on-error + exit 1 "Already up to date"). That lets a failed
-    # prior publish be retried on the next schedule/dispatch without waiting
-    # for a new upstream version.
-    if: always() && needs.bump.result == 'success' && needs.bump.outputs.sha != ''
+    # Runs after a successful bump job, including no-op bumps ("Already up to
+    # date" exits 0). That retries publish for a version that failed to ship
+    # earlier without waiting for a new upstream release. Real bump failures
+    # fail the bump job and skip this job.
+    if: needs.bump.result == 'success' && needs.bump.outputs.sha != ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
