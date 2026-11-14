@@ -1,7 +1,7 @@
 {
   "name": "cloc",
-  "version": "2.10.0-cloc",
-  "clocVersion": "v2.10",
+  "version": "2.12.0-cloc",
+  "clocVersion": "v2.12",
   "description": "An npm module for distributing cloc by Al Danial https://github.com/AlDanial/cloc",
   "main": "lib/cloc",
   "bin": {
